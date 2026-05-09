@@ -1,6 +1,8 @@
-import { pgTable, uuid, jsonb, timestamp, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, jsonb, timestamp, uniqueIndex, index, text } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { companies } from "./companies.js";
 import { clusterConnections } from "./cluster_connections.js";
+import { companySecrets } from "./company_secrets.js";
 
 export const clusterTenantPolicies = pgTable(
   "cluster_tenant_policies",
@@ -30,6 +32,12 @@ export const clusterTenantPolicies = pgTable(
       httpProxyUrl?: string | null;
     } | null>(),
     imageOverridesJson: jsonb("image_overrides_json").$type<Record<string, string> | null>(),
+    /** FK -> company_secrets.id. JSON-encoded {username, password} after decryption. Nullable. */
+    gitCredentialsSecretId: uuid("git_credentials_secret_id").references(() => companySecrets.id, { onDelete: "set null" }),
+    /** Cilium DSL: tenant-restrictive FQDN allow-list, intersected with M1 baseline. */
+    ciliumDnsAllowlist: text("cilium_dns_allowlist").array().notNull().default(sql`ARRAY[]::text[]`),
+    /** Cilium DSL: tenant-restrictive CIDR allow-list, intersected with M1 baseline. */
+    ciliumEgressCidrs: text("cilium_egress_cidrs").array().notNull().default(sql`ARRAY[]::text[]`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
