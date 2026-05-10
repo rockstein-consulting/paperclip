@@ -127,11 +127,13 @@ describeEmbeddedPostgres("secretService.upsertSecretByName (real db)", () => {
 });
 
 describe("secretService.upsertSecretByName (routing-only)", () => {
-  // Mock-driven test for the conflict-on-deleted branch. The real getByName
-  // filters out status='deleted' rows at the SQL layer, so the deleted branch
-  // is reachable in production only via stale rows from partial cleanup. We
-  // assert the routing here so the defensive branch is covered.
-  it("throws conflict when getByName surfaces a row in deleted status", async () => {
+  // Mock-driven test for the recovery-from-deleted branch. The real
+  // getByName filters out status='deleted' rows at the SQL layer, so this
+  // branch is reachable in production only via stale rows from a
+  // partially-failed previous `remove()` (provider.deleteOrArchive threw
+  // before the final hard-delete). The fix purges the stale row so the
+  // create path can proceed instead of dead-lettering reconnects.
+  it("purges a stale deleted row and falls through to create", async () => {
     const companyId = randomUUID();
     const deletedRow = {
       id: randomUUID(),
@@ -140,21 +142,47 @@ describe("secretService.upsertSecretByName (routing-only)", () => {
       status: "deleted",
     };
 
-    const selectChain = {
-      from: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      then: (resolve: (rows: unknown[]) => unknown) => resolve([deletedRow]),
-    };
+    // First call to getByName (inside upsertSecretByName) returns the stale
+    // deleted row; the create path's own getByName must then return null so
+    // the create step actually runs. We don't care about the create path
+    // here — we just need to confirm the throw is gone and db.delete fires
+    // against the stale row's id. Stub db.select so the first call returns
+    // [deletedRow] and any subsequent call returns []. Stub db.delete to
+    // record its where() argument.
+    let selectCalls = 0;
     const fakeDb = {
-      select: vi.fn().mockReturnValue(selectChain),
-    } as unknown as ReturnType<typeof createDb>;
+      select: vi.fn().mockImplementation(() => {
+        const rows = selectCalls === 0 ? [deletedRow] : [];
+        selectCalls++;
+        return {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          then: (resolve: (r: unknown[]) => unknown) => resolve(rows),
+        };
+      }),
+      delete: vi.fn().mockReturnValue({
+        where: vi.fn().mockResolvedValue(undefined),
+      }),
+    } as unknown as ReturnType<typeof createDb> & {
+      delete: ReturnType<typeof vi.fn>;
+    };
 
     const svc = secretService(fakeDb);
-    await expect(
-      svc.upsertSecretByName(companyId, {
+    // The create path will fail downstream because we haven't stubbed the
+    // full insert chain; we only need to confirm the early throw is gone
+    // *and* that db.delete was invoked to purge the stale row before any
+    // create attempt. Wrap in a try so a later create-path failure doesn't
+    // mask the assertions we care about.
+    try {
+      await svc.upsertSecretByName(companyId, {
         name: "oauth:test:xyz:access",
         value: "v1",
-      }),
-    ).rejects.toThrow(/previously deleted/i);
+      });
+    } catch (err) {
+      // Any error here must NOT match the previous "previously deleted"
+      // wording — that branch is gone.
+      expect(String((err as Error).message)).not.toMatch(/previously deleted/i);
+    }
+    expect(fakeDb.delete).toHaveBeenCalled();
   });
 });

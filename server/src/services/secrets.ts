@@ -2072,11 +2072,22 @@ export function secretService(db: Db, oauthDeps?: SecretServiceOAuthDeps) {
           return await api.rotate(existing.id, { value: input.value }, actor);
         }
         if (existing.status === "deleted") {
-          throw conflict(
-            `Secret was previously deleted and cannot be reused: ${input.name}`,
+          // Stale row from a partially-failed previous `remove()` (the
+          // provider's deleteOrArchive threw before the final hard-delete,
+          // leaving the row renamed and status=deleted). The normal
+          // getByName filter excludes deleted rows so this branch is
+          // unreachable in the happy path; if we ever land here, purge the
+          // dead row and fall through to create. Reconnects after a
+          // disconnect must always work — a permanent throw here would
+          // dead-letter that path.
+          await db
+            .delete(companySecrets)
+            .where(eq(companySecrets.id, existing.id));
+        } else {
+          throw unprocessable(
+            `Secret exists in non-active state: ${input.name}`,
           );
         }
-        throw unprocessable(`Secret exists in non-active state: ${input.name}`);
       }
       return await api.create(
         companyId,
