@@ -317,7 +317,8 @@ const manifest: PaperclipPluginManifestV1 = {
   capabilities: [
     "environment.drivers.register",
     "plugin.state.read",
-    "plugin.state.write"
+    "plugin.state.write",
+    "ui.dashboardWidget.register"
   ],
   entrypoints: {
     worker: "./dist/worker.js",
@@ -472,6 +473,11 @@ const BASE_PARAMS = {
 };
 
 describe("environment plugin scaffold", () => {
+  it("declares capabilities for its manifest features", () => {
+    expect(manifest.capabilities).toContain("environment.drivers.register");
+    expect(manifest.capabilities).toContain("ui.dashboardWidget.register");
+  });
+
   it("validates config", async () => {
     const driver = createFakeEnvironmentDriver({ driverKey: BASE_PARAMS.driverKey });
     const harness = createEnvironmentTestHarness({ manifest, environmentDriver: driver });
@@ -538,7 +544,8 @@ const manifest: PaperclipPluginManifestV1 = {
   capabilities: [
     "events.subscribe",
     "plugin.state.read",
-    "plugin.state.write"
+    "plugin.state.write",
+    "ui.dashboardWidget.register"
   ],
   entrypoints: {
     worker: "./dist/worker.js",
@@ -628,6 +635,11 @@ import manifest from "../src/manifest.js";
 import plugin from "../src/worker.js";
 
 describe("plugin scaffold", () => {
+  it("declares capabilities for its manifest features", () => {
+    expect(manifest.capabilities).toContain("events.subscribe");
+    expect(manifest.capabilities).toContain("ui.dashboardWidget.register");
+  });
+
   it("registers data + actions and handles events", async () => {
     const harness = createTestHarness({ manifest, capabilities: [...manifest.capabilities, "events.emit"] });
     await plugin.definition.setup(harness.ctx);
