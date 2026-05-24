@@ -1147,13 +1147,15 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
           const now = new Date();
           const agentRef = declaration.assigneeRef;
           const projectRef = declaration.projectRef;
-          const assigneeAgentId = overrides?.assigneeAgentId
-            ?? (agentRef?.resourceKind === "agent"
+          const assigneeAgentId = overrides && "assigneeAgentId" in overrides
+            ? overrides.assigneeAgentId ?? null
+            : (agentRef?.resourceKind === "agent"
               ? [...agents.values()].find((agent) => isInCompany(agent, companyId) && isManagedAgent(agent, agentRef.resourceKey))?.id
               : null)
             ?? null;
-          const projectId = overrides?.projectId
-            ?? (projectRef?.resourceKind === "project"
+          const projectId = overrides && "projectId" in overrides
+            ? overrides.projectId ?? null
+            : (projectRef?.resourceKind === "project"
               ? [...projects.values()].find((project) => (
                 isInCompany(project, companyId)
                 && project.managedByPlugin?.pluginKey === manifest.id
@@ -1240,7 +1242,62 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
         },
         async reset(routineKey, companyId, overrides) {
           const resolved = await this.reconcile(routineKey, companyId, overrides);
-          return { ...resolved, status: resolved.routine ? "reset" : resolved.status } satisfies PluginManagedRoutineResolution;
+          const declaration = manifest.routines?.find((routine) => routine.routineKey === routineKey);
+          if (!declaration || !resolved.routine) {
+            return { ...resolved, status: resolved.routine ? "reset" : resolved.status } satisfies PluginManagedRoutineResolution;
+          }
+          const agentRef = declaration.assigneeRef;
+          const projectRef = declaration.projectRef;
+          const assigneeAgentId = overrides && "assigneeAgentId" in overrides
+            ? overrides.assigneeAgentId ?? null
+            : (agentRef?.resourceKind === "agent"
+              ? [...agents.values()].find((agent) => isInCompany(agent, companyId) && isManagedAgent(agent, agentRef.resourceKey))?.id
+              : null)
+            ?? null;
+          const projectId = overrides && "projectId" in overrides
+            ? overrides.projectId ?? null
+            : (projectRef?.resourceKind === "project"
+              ? [...projects.values()].find((project) => (
+                isInCompany(project, companyId)
+                && project.managedByPlugin?.pluginKey === manifest.id
+                && project.managedByPlugin?.resourceKey === projectRef.resourceKey
+              ))?.id
+              : null)
+            ?? null;
+          const missingRefs: NonNullable<PluginManagedRoutineResolution["missingRefs"]> = [];
+          if (agentRef && !assigneeAgentId) missingRefs.push({ ...agentRef, pluginKey: manifest.id });
+          if (projectRef && !projectId) missingRefs.push({ ...projectRef, pluginKey: manifest.id });
+          if (missingRefs.length > 0) {
+            return {
+              ...resolved,
+              status: "missing_refs",
+              missingRefs,
+            } satisfies PluginManagedRoutineResolution;
+          }
+          const now = new Date();
+          const routine = {
+            ...resolved.routine,
+            projectId,
+            goalId: declaration.goalId ?? null,
+            title: declaration.title,
+            description: declaration.description ?? null,
+            assigneeAgentId,
+            priority: declaration.priority ?? "medium",
+            status: declaration.status ?? (assigneeAgentId ? "active" : "paused"),
+            concurrencyPolicy: declaration.concurrencyPolicy ?? "coalesce_if_active",
+            catchUpPolicy: declaration.catchUpPolicy ?? "skip_missed",
+            variables: declaration.variables ?? [],
+            updatedAt: now,
+            managedByPlugin: resolved.routine.managedByPlugin
+              ? {
+                  ...resolved.routine.managedByPlugin,
+                  defaultsJson: { title: declaration.title, issueTemplate: declaration.issueTemplate ?? null },
+                  updatedAt: now,
+                }
+              : resolved.routine.managedByPlugin,
+          } as Routine;
+          routines.set(routine.id, routine);
+          return { ...resolved, routine, status: "reset", missingRefs: [] } satisfies PluginManagedRoutineResolution;
         },
         async update(routineKey, companyId, patch) {
           const resolved = await this.get(routineKey, companyId);

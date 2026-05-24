@@ -9,6 +9,7 @@ import {
 } from "@paperclipai/plugin-sdk";
 import {
   briefPreferencesSchema,
+  dismissBriefCardInputSchema,
   listBriefCardsInputSchema,
   pinBriefCardInputSchema,
   updateBriefPreferencesInputSchema,
@@ -402,15 +403,18 @@ const plugin = definePlugin({
       };
     });
 
-    ctx.data.register("settings", async (params) => {
-      const companyId = stringParam((params as Record<string, unknown>).companyId, "companyId");
-      const [managedProject, managedAgent, managedSkills, managedRoutines, agentOptions, projectOptions] = await Promise.all([
+    ctx.data.register("settings", async (params, request) => {
+      const input = bridgeParams(params);
+      const companyId = stringParam(input.companyId, "companyId");
+      const userId = scopedUserId(input, request);
+      const [managedProject, managedAgent, managedSkills, managedRoutines, agentOptions, projectOptions, preferences] = await Promise.all([
         ctx.projects.managed.get(BRIEFS_PROJECT_KEY, companyId),
         ctx.agents.managed.get(BRIEFING_ANALYST_AGENT_KEY, companyId),
         Promise.all(BRIEFS_MANAGED_SKILL_KEYS.map((skillKey) => ctx.skills.managed.get(skillKey, companyId))),
         Promise.all(BRIEFS_MANAGED_ROUTINE_KEYS.map((routineKey) => ctx.routines.managed.get(routineKey, companyId))),
         ctx.agents.list({ companyId, limit: 200 }),
         ctx.projects.list({ companyId, limit: 200 }),
+        store.loadPreferences({ companyId, userId }),
       ]);
 
       return {
@@ -418,6 +422,7 @@ const plugin = definePlugin({
         managedAgent,
         managedSkills,
         managedRoutines,
+        preferences,
         agentOptions: agentOptions.map((agent) => ({
           id: agent.id,
           name: agent.name,
@@ -458,6 +463,48 @@ const plugin = definePlugin({
       return ctx.projects.managed.reconcile(BRIEFS_PROJECT_KEY, stringParam(params.companyId, "companyId"));
     });
 
+    async function ensureBriefsProjectReady(companyId: string) {
+      const managedProject = await ctx.projects.managed.reconcile(BRIEFS_PROJECT_KEY, companyId);
+      if (!managedProject.projectId) {
+        throw new Error("Briefs managed project is not available");
+      }
+      return { managedProject, projectId: managedProject.projectId };
+    }
+
+    function managedRoutineOverrides(input: { projectId: string; agentId?: string | null }) {
+      return {
+        projectId: input.projectId,
+        ...(input.agentId ? { assigneeAgentId: input.agentId } : {}),
+      };
+    }
+
+    async function reconcileBriefsRoutineRefs(companyId: string) {
+      const [{ managedProject, projectId }, managedAgent] = await Promise.all([
+        ensureBriefsProjectReady(companyId),
+        ctx.agents.managed.reconcile(BRIEFING_ANALYST_AGENT_KEY, companyId),
+      ]);
+      return {
+        managedProject,
+        managedAgent,
+        overrides: managedRoutineOverrides({ projectId, agentId: managedAgent.agentId }),
+      };
+    }
+
+    async function reconcileBriefsRoutine(
+      routineKey: string,
+      companyId: string,
+      overrides: { projectId: string; assigneeAgentId?: string },
+    ) {
+      const resolved = await ctx.routines.managed.reconcile(routineKey, companyId, overrides);
+      const routine = resolved.routine;
+      const wrongProject = routine && routine.projectId !== overrides.projectId;
+      const wrongAssignee = routine && overrides.assigneeAgentId && routine.assigneeAgentId !== overrides.assigneeAgentId;
+      if (wrongProject || wrongAssignee) {
+        return ctx.routines.managed.reset(routineKey, companyId, overrides);
+      }
+      return resolved;
+    }
+
     ctx.actions.register("reconcile-managed-skills", async (params) => {
       const companyId = stringParam(params.companyId, "companyId");
       return {
@@ -478,44 +525,46 @@ const plugin = definePlugin({
 
     ctx.actions.register("reconcile-managed-routines", async (params) => {
       const companyId = stringParam(params.companyId, "companyId");
+      const { managedProject, managedAgent, overrides } = await reconcileBriefsRoutineRefs(companyId);
       return {
         managedRoutines: await Promise.all(
-          BRIEFS_MANAGED_ROUTINE_KEYS.map((routineKey) => ctx.routines.managed.reconcile(routineKey, companyId)),
+          BRIEFS_MANAGED_ROUTINE_KEYS.map((routineKey) => reconcileBriefsRoutine(routineKey, companyId, overrides)),
         ),
+        managedProject,
+        managedAgent,
       };
     });
 
     ctx.actions.register("reconcile-managed-routine", async (params) => {
-      return ctx.routines.managed.reconcile(
+      const companyId = stringParam(params.companyId, "companyId");
+      const { overrides } = await reconcileBriefsRoutineRefs(companyId);
+      return reconcileBriefsRoutine(
         stringParam(params.routineKey, "routineKey"),
-        stringParam(params.companyId, "companyId"),
-        {
-          assigneeAgentId: typeof params.assigneeAgentId === "string" ? params.assigneeAgentId : null,
-          projectId: typeof params.projectId === "string" ? params.projectId : null,
-        },
+        companyId,
+        overrides,
       );
     });
 
     ctx.actions.register("reset-managed-routine", async (params) => {
+      const companyId = stringParam(params.companyId, "companyId");
+      const { overrides } = await reconcileBriefsRoutineRefs(companyId);
       return ctx.routines.managed.reset(
         stringParam(params.routineKey, "routineKey"),
-        stringParam(params.companyId, "companyId"),
-        {
-          assigneeAgentId: typeof params.assigneeAgentId === "string" ? params.assigneeAgentId : null,
-          projectId: typeof params.projectId === "string" ? params.projectId : null,
-        },
+        companyId,
+        overrides,
       );
     });
 
     ctx.actions.register("reconcile-managed-resources", async (params) => {
       const companyId = stringParam(params.companyId, "companyId");
-      const managedProject = await ctx.projects.managed.reconcile(BRIEFS_PROJECT_KEY, companyId);
-      const managedSkills = await Promise.all(
-        BRIEFS_MANAGED_SKILL_KEYS.map((skillKey) => ctx.skills.managed.reconcile(skillKey, companyId)),
-      );
-      const managedAgent = await ctx.agents.managed.reconcile(BRIEFING_ANALYST_AGENT_KEY, companyId);
+      const [{ managedProject, projectId }, managedAgent, managedSkills] = await Promise.all([
+        ensureBriefsProjectReady(companyId),
+        ctx.agents.managed.reconcile(BRIEFING_ANALYST_AGENT_KEY, companyId),
+        Promise.all(BRIEFS_MANAGED_SKILL_KEYS.map((skillKey) => ctx.skills.managed.reconcile(skillKey, companyId))),
+      ]);
+      const overrides = managedRoutineOverrides({ projectId, agentId: managedAgent.agentId });
       const managedRoutines = await Promise.all(
-        BRIEFS_MANAGED_ROUTINE_KEYS.map((routineKey) => ctx.routines.managed.reconcile(routineKey, companyId)),
+        BRIEFS_MANAGED_ROUTINE_KEYS.map((routineKey) => reconcileBriefsRoutine(routineKey, companyId, overrides)),
       );
       return { managedProject, managedSkills, managedAgent, managedRoutines };
     });
@@ -573,9 +622,10 @@ const plugin = definePlugin({
         companyId,
         typeof input.assigneeAgentId === "string" ? input.assigneeAgentId : null,
       );
+      const { projectId } = await ensureBriefsProjectReady(companyId);
       return ctx.routines.managed.run(routineKey, companyId, {
         assigneeAgentId,
-        projectId: typeof input.projectId === "string" ? input.projectId : null,
+        projectId,
         variables: nextVariables,
       });
     });
@@ -588,7 +638,7 @@ const plugin = definePlugin({
         companyId,
         typeof input.assigneeAgentId === "string" ? input.assigneeAgentId : null,
       );
-      const projectId = typeof input.projectId === "string" ? input.projectId : null;
+      const { projectId } = await ensureBriefsProjectReady(companyId);
       const routineKeys = BRIEFS_MANAGED_ROUTINE_KEYS.filter((routineKey) => routineKey !== MANUAL_REFRESH_ROUTINE_KEY);
       const runs = [];
       for (const routineKey of routineKeys) {
@@ -609,9 +659,10 @@ const plugin = definePlugin({
         companyId,
         typeof input.assigneeAgentId === "string" ? input.assigneeAgentId : null,
       );
+      const { projectId } = await ensureBriefsProjectReady(companyId);
       return ctx.routines.managed.run(MANUAL_REFRESH_ROUTINE_KEY, companyId, {
         assigneeAgentId,
-        projectId: typeof input.projectId === "string" ? input.projectId : null,
+        projectId,
         variables: {
           userId: scopedUserId(input, request),
           rootIssueId,
@@ -632,6 +683,23 @@ const plugin = definePlugin({
         entityType: "plugin:briefs:card",
         entityId: input.cardId,
         metadata: { userId: input.userId, pinned: input.pinned },
+      });
+      return { ok: true };
+    });
+
+    ctx.actions.register("dismiss-card", async (params, request) => {
+      const raw = bridgeParams(params);
+      const input = dismissBriefCardInputSchema.parse({
+        ...raw,
+        userId: scopedUserId(raw, request),
+      });
+      await store.dismissCard(input);
+      await ctx.activity.log({
+        companyId: input.companyId,
+        message: "Dismissed briefing card",
+        entityType: "plugin:briefs:card",
+        entityId: input.cardId,
+        metadata: { userId: input.userId },
       });
       return { ok: true };
     });

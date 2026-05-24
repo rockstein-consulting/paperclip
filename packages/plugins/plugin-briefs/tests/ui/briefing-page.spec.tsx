@@ -27,6 +27,14 @@ vi.mock("@paperclipai/plugin-sdk/ui", () => {
       navigate: () => {},
       linkProps: (to: string) => ({ href: to, onClick: () => {} }),
     }),
+    useHostContext: () => ({
+      companyId: "company-1",
+      companyPrefix: "PAP",
+      projectId: null,
+      entityId: null,
+      entityType: null,
+      userId: "user-1",
+    }),
     usePluginAction: () => vi.fn(async () => ({ ok: true })),
     usePluginData: (key: string) => {
       if (key === "page") {
@@ -63,6 +71,16 @@ vi.mock("@paperclipai/plugin-sdk/ui", () => {
                 routine: { id: "routine-2", title: "Update Briefing cards for {{userId}}", status: "paused", projectId: "project-1", assigneeAgentId: "agent-1" },
               },
             ],
+            preferences: {
+              companyId: "company-1",
+              userId: "user-1",
+              cadence: "hourly",
+              retentionDays: 7,
+              doneRetentionHours: 72,
+              staleAfterDays: 7,
+              maxUnpinnedCards: 30,
+              scope: "user",
+            },
             agentOptions: [{ id: "agent-1", name: "Briefing Analyst", icon: "newspaper" }],
             projectOptions: [{ id: "project-1", name: "Briefs", color: "#0f766e" }],
           },
@@ -101,6 +119,8 @@ describe("BriefingPage", () => {
     const html = renderPage(gallery());
 
     expect(html).toContain("data-briefs-list");
+    expect(html).toContain("data-briefs-card-grid");
+    expect(html).toContain("grid-template-columns:repeat(2, minmax(0, 1fr))");
     expect(html).toContain("Recent work and next steps");
     expect(html).not.toContain("data-briefs-mobile-tabs");
     expect(html).not.toContain("data-briefs-section");
@@ -136,6 +156,8 @@ describe("BriefingPage", () => {
 
     expect(html).toContain("data-briefs-page-header");
     expect(html).toContain("data-briefs-page-meta");
+    expect(html).toContain('aria-label="Briefing settings"');
+    expect(html).toContain("/PAP/instance/settings/plugins/paperclipai.plugin-briefs");
     expect(html).not.toContain("Preferences");
     expect(html).not.toContain("Durable cards for areas of work");
   });
@@ -148,13 +170,14 @@ describe("BriefingPage", () => {
 });
 
 describe("SidebarLink", () => {
-  it("renders the Briefing sidebar entry with an icon and company route", () => {
+  it("renders the Briefing sidebar entry with an icon, company route, and no badge count", () => {
     const html = renderToStaticMarkup(<SidebarLink context={hostContext as never} />);
 
     expect(html).toContain("Briefing");
     expect(html).toContain('href="/briefs"');
     expect(html).toContain("data-briefs-sidebar-icon");
     expect(html).toContain("color:currentColor");
+    expect(html).not.toContain("briefs need your attention");
   });
 });
 
@@ -163,6 +186,9 @@ describe("SettingsPage", () => {
     const html = renderToStaticMarkup(<SettingsPage context={hostContext as never} />);
 
     expect(html).toContain("Managed resources");
+    expect(html).toContain("Dashboard settings");
+    expect(html).toContain("Maximum unpinned cards");
+    expect(html).toContain("Mark stale after days");
     expect(html).toContain("Briefing Analyst");
     expect(html).toContain("data-managed-routines-list");
     expect(html).toContain("Discover Briefing cards");

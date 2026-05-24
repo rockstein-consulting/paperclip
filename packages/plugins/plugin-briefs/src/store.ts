@@ -176,6 +176,14 @@ export function createBriefsStore(db: PluginDatabaseClient) {
     },
 
     async saveCard(card: BriefCard): Promise<BriefCard> {
+      const existingBeforeRows = await db.query<{ id: string; pinned: boolean; hidden: boolean }>(
+        `SELECT id, pinned, hidden FROM ${cardsTable} WHERE company_id = $1 AND user_id = $2 AND slug = $3 LIMIT 1`,
+        [card.companyId, card.userId, card.slug],
+      );
+      const existingBefore = existingBeforeRows[0] ?? null;
+      const pinned = Boolean(existingBefore?.pinned || card.pinned);
+      const hidden = Boolean(existingBefore?.hidden || card.hidden);
+
       await db.execute(
         `INSERT INTO ${cardsTable} (
            id, company_id, user_id, slug, title, grouping_description, root_issue_id, state, summary_status,
@@ -189,7 +197,7 @@ export function createBriefsStore(db: PluginDatabaseClient) {
            state = EXCLUDED.state,
            summary_status = EXCLUDED.summary_status,
            pinned = ${cardsTable}.pinned OR EXCLUDED.pinned,
-           hidden = EXCLUDED.hidden,
+           hidden = ${cardsTable}.hidden OR EXCLUDED.hidden,
            stale_at = EXCLUDED.stale_at,
            expires_at = CASE WHEN ${cardsTable}.pinned OR EXCLUDED.pinned THEN NULL ELSE EXCLUDED.expires_at END,
            last_meaningful_event_at = EXCLUDED.last_meaningful_event_at,
@@ -204,16 +212,16 @@ export function createBriefsStore(db: PluginDatabaseClient) {
           card.rootIssueId,
           card.state,
           card.summaryStatus,
-          card.pinned,
-          card.hidden,
+          pinned,
+          hidden,
           card.staleAt,
-          card.expiresAt,
+          pinned ? null : card.expiresAt,
           card.lastMeaningfulEventAt,
         ],
       );
 
-      const existingRows = await db.query<{ id: string; pinned: boolean }>(
-        `SELECT id, pinned FROM ${cardsTable} WHERE company_id = $1 AND user_id = $2 AND slug = $3 LIMIT 1`,
+      const existingRows = await db.query<{ id: string; pinned: boolean; hidden: boolean }>(
+        `SELECT id, pinned, hidden FROM ${cardsTable} WHERE company_id = $1 AND user_id = $2 AND slug = $3 LIMIT 1`,
         [card.companyId, card.userId, card.slug],
       );
       const persistedCardId = existingRows[0]?.id ?? card.id;
@@ -285,6 +293,7 @@ export function createBriefsStore(db: PluginDatabaseClient) {
         ...card,
         id: persistedCardId,
         pinned: existingRows[0]?.pinned ?? card.pinned,
+        hidden: existingRows[0]?.hidden ?? card.hidden,
         latestSnapshotId: card.snapshot.id,
         snapshot: { ...card.snapshot, cardId: persistedCardId },
         sources: card.sources.map((source) => ({ ...source, cardId: persistedCardId })),
@@ -297,6 +306,15 @@ export function createBriefsStore(db: PluginDatabaseClient) {
          SET pinned = $1, expires_at = CASE WHEN $1 THEN NULL ELSE expires_at END, updated_at = now()
          WHERE company_id = $2 AND user_id = $3 AND id = $4`,
         [input.pinned, input.companyId, input.userId, input.cardId],
+      );
+    },
+
+    async dismissCard(input: { companyId: string; userId: string; cardId: string }): Promise<void> {
+      await db.execute(
+        `UPDATE ${cardsTable}
+         SET hidden = true, pinned = false, updated_at = now()
+         WHERE company_id = $1 AND user_id = $2 AND id = $3`,
+        [input.companyId, input.userId, input.cardId],
       );
     },
 

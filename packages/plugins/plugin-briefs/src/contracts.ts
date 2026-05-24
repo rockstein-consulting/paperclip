@@ -125,6 +125,12 @@ export const pinBriefCardInputSchema = z.object({
   pinned: z.boolean(),
 }).strict();
 
+export const dismissBriefCardInputSchema = z.object({
+  companyId: z.string().min(1),
+  userId: z.string().min(1),
+  cardId: z.string().min(1),
+}).strict();
+
 export const updateBriefPreferencesInputSchema = briefPreferencesSchema.partial({
   cadence: true,
   retentionDays: true,
@@ -154,5 +160,6 @@ export type BriefCard = z.infer<typeof briefCardSchema>;
 export type BriefPreferences = z.infer<typeof briefPreferencesSchema>;
 export type ListBriefCardsInput = z.infer<typeof listBriefCardsInputSchema>;
 export type PinBriefCardInput = z.infer<typeof pinBriefCardInputSchema>;
+export type DismissBriefCardInput = z.infer<typeof dismissBriefCardInputSchema>;
 export type UpdateBriefPreferencesInput = z.infer<typeof updateBriefPreferencesInputSchema>;
 export type BriefCursorEvent = z.infer<typeof briefCursorEventSchema>;

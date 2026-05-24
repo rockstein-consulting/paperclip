@@ -1,6 +1,7 @@
 import {
   IssueRow as PluginIssueRow,
   ManagedRoutinesList as PluginManagedRoutinesList,
+  useHostContext,
   useHostNavigation,
   usePluginAction,
   usePluginData,
@@ -13,6 +14,7 @@ import {
 } from "@paperclipai/plugin-sdk/ui";
 import {
   useCallback,
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -21,10 +23,10 @@ import {
 import type {
   BriefCard,
   BriefCardSource,
+  BriefPreferences,
   BriefTaskRow,
 } from "../contracts.js";
 import {
-  countAttention,
   formatRelative,
   sortBriefCards,
 } from "./view-model.js";
@@ -70,6 +72,8 @@ type PageData = {
 const DISCOVER_CARDS_ROUTINE_KEY = "briefs-discover-cards";
 const UPDATE_CARDS_ROUTINE_KEY = "briefs-update-cards";
 const MANUAL_REFRESH_ROUTINE_KEY = "briefs-manual-refresh";
+const BRIEFS_PLUGIN_SETTINGS_PATH = "/instance/settings/plugins/paperclipai.plugin-briefs";
+const DISMISS_ANIMATION_MS = 220;
 
 const ROUTINE_FALLBACKS: Record<string, { title: string; schedule: string | null }> = {
   [DISCOVER_CARDS_ROUTINE_KEY]: { title: "Discover Briefing cards", schedule: "0 */6 * * *" },
@@ -77,15 +81,8 @@ const ROUTINE_FALLBACKS: Record<string, { title: string; schedule: string | null
   [MANUAL_REFRESH_ROUTINE_KEY]: { title: "Refresh Briefing card", schedule: "Manual" },
 };
 
-export function SidebarLink({ context }: PluginSidebarProps) {
+export function SidebarLink(_props: PluginSidebarProps) {
   const nav = useHostNavigation();
-  const params = useMemo(() => ({ companyId: context.companyId ?? "" }), [context.companyId]);
-  const enabled = Boolean(params.companyId);
-  const { data } = usePluginData<{ cards: BriefCard[] }>("cards", enabled ? params : undefined);
-
-  const cards = data?.cards ?? [];
-  const count = useMemo(() => countAttention(cards), [cards]);
-
   const link = nav.linkProps("/briefs");
   return (
     <a
@@ -104,7 +101,6 @@ export function SidebarLink({ context }: PluginSidebarProps) {
     >
       <BriefingSidebarIcon />
       <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>Briefing</span>
-      {count > 0 ? <AttentionBadge count={count} /> : null}
     </a>
   );
 }
@@ -130,29 +126,6 @@ function BriefingSidebarIcon() {
   );
 }
 
-function AttentionBadge({ count }: { count: number }) {
-  return (
-    <span
-      aria-label={`${count} brief${count === 1 ? "" : "s"} need your attention`}
-      style={{
-        minWidth: 18,
-        padding: "0 6px",
-        height: 18,
-        borderRadius: 9,
-        background: toneColors.warning.badgeBg,
-        color: toneColors.warning.badgeFg,
-        fontSize: 11,
-        fontWeight: 600,
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
-
 export function BriefingPage({ context }: PluginPageProps) {
   const params = useMemo(() => ({ companyId: context.companyId ?? "" }), [context.companyId]);
   const enabled = Boolean(params.companyId);
@@ -172,7 +145,12 @@ export function BriefingPage({ context }: PluginPageProps) {
   return (
     <PageShell
       meta={data ? <PageMeta data={data} /> : null}
-      action={<RefreshButton onClick={refresh} loading={loading} />}
+      action={(
+        <>
+          <RefreshButton onClick={refresh} loading={loading} />
+          <SettingsGearLink />
+        </>
+      )}
     >
       {error ? (
         <ErrorPanel message={error.message} onRetry={refresh} />
@@ -231,6 +209,7 @@ type SettingsData = {
   managedProject: ManagedProject;
   managedSkills: ManagedSkill[];
   managedRoutines: ManagedRoutine[];
+  preferences: BriefPreferences;
   agentOptions: Array<{ id: string; name: string; status?: string | null; adapterType?: string | null; icon?: string | null }>;
   projectOptions: Array<{ id: string; name: string; status?: string | null; color?: string | null }>;
 };
@@ -244,8 +223,10 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
   const updateRoutineStatus = usePluginAction("update-managed-routine-status");
   const runRoutine = usePluginAction("run-managed-routine");
   const runBriefingRoutines = usePluginAction("run-briefing-routines");
+  const updatePreferences = usePluginAction("update-preferences");
   const toast = usePluginToast();
   const [busy, setBusy] = useState<string | null>(null);
+  const [draftPreferences, setDraftPreferences] = useState<BriefPreferences | null>(null);
 
   if (!enabled) {
     return <SettingsShell><Callout>Choose a company to view Briefing settings.</Callout></SettingsShell>;
@@ -261,9 +242,9 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
   }
 
   const data = settings.data;
+  const preferences = draftPreferences ?? data.preferences;
   const managedRoutineItems = buildManagedRoutineItems(data.managedRoutines);
   const assigneeAgentId = data.managedAgent.agentId ?? data.managedAgent.agent?.id ?? null;
-  const projectId = data.managedProject.projectId ?? data.managedProject.project?.id ?? null;
   const resourcesHealthy = resourceReady(data.managedAgent) && resourceReady(data.managedProject)
     && data.managedSkills.every(resourceReady)
     && data.managedRoutines.every(resourceReady);
@@ -288,7 +269,6 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
         companyId: params.companyId,
         ...(context.userId ? { userId: context.userId } : {}),
         assigneeAgentId,
-        projectId,
       });
       toast({ tone: "success", title: "Briefing routines queued" });
       settings.refresh();
@@ -311,7 +291,6 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
         routineKey: routine.resourceKey ?? routine.key,
         ...(context.userId ? { userId: context.userId } : {}),
         assigneeAgentId: routine.assigneeAgentId ?? assigneeAgentId,
-        projectId: routine.projectId ?? projectId,
         variables: context.userId ? { userId: context.userId } : undefined,
       });
       toast({ tone: "success", title: "Routine queued" });
@@ -349,7 +328,6 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
         companyId: params.companyId,
         routineKey: routine.resourceKey,
         assigneeAgentId,
-        projectId,
       });
       toast({ tone: "success", title: "Routine reconciled" });
       settings.refresh();
@@ -360,9 +338,66 @@ export function SettingsPage({ context }: PluginSettingsPageProps) {
     }
   }
 
+  async function savePreferences() {
+    setBusy("preferences");
+    try {
+      await updatePreferences({
+        ...preferences,
+        companyId: params.companyId,
+        ...(context.userId ? { userId: context.userId } : {}),
+      });
+      toast({ tone: "success", title: "Briefing settings saved" });
+      settings.refresh();
+      setDraftPreferences(null);
+    } catch (err) {
+      toast({ tone: "error", title: "Settings save failed", body: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function patchPreferences(patch: Partial<BriefPreferences>) {
+    setDraftPreferences((current) => ({ ...(current ?? data.preferences), ...patch }));
+  }
+
   return (
     <SettingsShell>
       <section style={{ display: "grid", gap: 18 }}>
+        <div style={{ display: "grid", gap: 12, maxWidth: 760 }}>
+          <div style={{ display: "grid", gap: 4 }}>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>Dashboard settings</h2>
+            <Tiny>Control refresh cadence, stale windows, retention, and card count limits.</Tiny>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 10 }}>
+            <PreferenceField label="Refresh cadence">
+              <select
+                value={preferences.cadence}
+                onChange={(event) => patchPreferences({ cadence: event.currentTarget.value as BriefPreferences["cadence"] })}
+                style={fieldStyle}
+              >
+                <option value="manual">Manual</option>
+                <option value="hourly">Hourly</option>
+                <option value="daily">Daily</option>
+              </select>
+            </PreferenceField>
+            <PreferenceField label="Maximum unpinned cards">
+              <NumberField value={preferences.maxUnpinnedCards} min={1} onChange={(maxUnpinnedCards) => patchPreferences({ maxUnpinnedCards })} />
+            </PreferenceField>
+            <PreferenceField label="Keep active cards for days">
+              <NumberField value={preferences.retentionDays} min={1} onChange={(retentionDays) => patchPreferences({ retentionDays })} />
+            </PreferenceField>
+            <PreferenceField label="Mark stale after days">
+              <NumberField value={preferences.staleAfterDays} min={1} onChange={(staleAfterDays) => patchPreferences({ staleAfterDays })} />
+            </PreferenceField>
+            <PreferenceField label="Keep done cards for hours">
+              <NumberField value={preferences.doneRetentionHours} min={1} onChange={(doneRetentionHours) => patchPreferences({ doneRetentionHours })} />
+            </PreferenceField>
+          </div>
+          <div>
+            <SettingsButton onClick={savePreferences} loading={busy === "preferences"} primary>Save dashboard settings</SettingsButton>
+          </div>
+        </div>
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 4 }}>
             <h2 style={{ margin: 0, fontSize: 16, fontWeight: 650 }}>Managed resources</h2>
@@ -411,6 +446,42 @@ function SettingsShell({ children }: { children: ReactNode }) {
 
 function Tiny({ children }: { children: ReactNode }) {
   return <span style={{ fontSize: 12, color: tokens.muted }}>{children}</span>;
+}
+
+const fieldStyle: CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
+  borderRadius: 6,
+  border: `1px solid ${tokens.border}`,
+  background: tokens.card,
+  color: tokens.fg,
+  padding: "7px 9px",
+  fontSize: 13,
+  fontFamily: fontStack,
+};
+
+function PreferenceField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: "grid", gap: 5, minWidth: 0 }}>
+      <span style={{ fontSize: 12, color: tokens.muted, fontWeight: 550 }}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function NumberField({ value, min, onChange }: { value: number; min: number; onChange: (value: number) => void }) {
+  return (
+    <input
+      type="number"
+      min={min}
+      value={value}
+      onChange={(event) => {
+        const next = Number.parseInt(event.currentTarget.value, 10);
+        if (Number.isFinite(next)) onChange(Math.max(min, next));
+      }}
+      style={fieldStyle}
+    />
+  );
 }
 
 function Callout({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "danger" }) {
@@ -521,7 +592,13 @@ function PageShell({ children, meta, action }: {
   action?: ReactNode;
 }) {
   return (
-    <div style={{ fontFamily: fontStack, color: tokens.fg, padding: "20px clamp(12px, 4vw, 32px)", maxWidth: 1280, margin: "0 auto", minHeight: "100vh" }}>
+    <div style={{ fontFamily: fontStack, color: tokens.fg, padding: "20px clamp(12px, 3vw, 28px)", width: "100%", boxSizing: "border-box", margin: 0, minHeight: "100vh" }}>
+      <style>{`
+        @media (max-width: 900px) {
+          [data-briefs-card-grid] { grid-template-columns: 1fr !important; }
+          [data-briefs-page-header] > [data-briefs-page-meta] { flex-basis: 100% !important; order: 2 !important; }
+        }
+      `}</style>
       <header data-briefs-page-header style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: 12, marginBottom: 20 }}>
         <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: -0.2 }}>Briefing</h1>
         <div data-briefs-page-meta style={{ flex: 1, minWidth: 0, fontSize: 12, color: tokens.muted, overflow: "hidden", textOverflow: "ellipsis" }}>{meta}</div>
@@ -531,6 +608,52 @@ function PageShell({ children, meta, action }: {
       </header>
       {children}
     </div>
+  );
+}
+
+function SettingsGearLink() {
+  const context = useHostContext();
+  const nav = useHostNavigation();
+  const companyPrefix = context.companyPrefix?.trim();
+  const settingsPath = companyPrefix
+    ? `/${companyPrefix.toUpperCase()}${BRIEFS_PLUGIN_SETTINGS_PATH}`
+    : BRIEFS_PLUGIN_SETTINGS_PATH;
+  const link = nav.linkProps(settingsPath);
+  return (
+    <a
+      {...link}
+      title="Briefing settings"
+      aria-label="Briefing settings"
+      style={{
+        width: 30,
+        height: 30,
+        borderRadius: 6,
+        border: `1px solid ${tokens.border}`,
+        background: tokens.card,
+        color: tokens.fg,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        textDecoration: "none",
+        boxSizing: "border-box",
+      }}
+    >
+      <GearIcon />
+    </a>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 16 16" style={{ width: 15, height: 15 }} fill="none">
+      <path
+        d="M6.9 1.75h2.2l.28 1.44c.33.12.64.3.92.53l1.38-.5 1.1 1.9-1.1.95c.03.18.05.37.05.56s-.02.38-.05.56l1.1.95-1.1 1.9-1.38-.5c-.28.23-.59.41-.92.53l-.28 1.44H6.9l-.28-1.44a3.52 3.52 0 0 1-.92-.53l-1.38.5-1.1-1.9 1.1-.95a3.3 3.3 0 0 1-.05-.56c0-.19.02-.38.05-.56l-1.1-.95 1.1-1.9 1.38.5c.28-.23.59-.41.92-.53l.28-1.44Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="8" cy="7.75" r="1.7" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
   );
 }
 
@@ -567,10 +690,58 @@ function RefreshButton({ onClick, loading }: { onClick: () => void; loading: boo
 }
 
 function PageBody({ data, onChanged }: { data: PageData; onChanged: () => void }) {
-  const cards = useMemo(() => sortBriefCards(data.cards), [data.cards]);
+  const [optimisticPins, setOptimisticPins] = useState<Record<string, boolean>>({});
+  const [dismissingIds, setDismissingIds] = useState<Set<string>>(() => new Set());
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
+
+  useEffect(() => {
+    const liveIds = new Set(data.cards.map((card) => card.id));
+    setOptimisticPins((current) => Object.fromEntries(
+      Object.entries(current).filter(([cardId]) => liveIds.has(cardId)),
+    ));
+    setDismissingIds((current) => filterIdSet(current, liveIds));
+    setRemovedIds((current) => filterIdSet(current, liveIds));
+  }, [data.cards]);
+
+  const cards = useMemo(() => sortBriefCards(
+    data.cards
+      .filter((card) => !removedIds.has(card.id))
+      .map((card) => ({
+        ...card,
+        pinned: optimisticPins[card.id] ?? card.pinned,
+      })),
+  ), [data.cards, optimisticPins, removedIds]);
+
+  const handlePinChanged = useCallback((cardId: string, pinned: boolean) => {
+    setOptimisticPins((current) => ({ ...current, [cardId]: pinned }));
+  }, []);
+
+  const handlePinFailed = useCallback((cardId: string, pinned: boolean) => {
+    setOptimisticPins((current) => ({ ...current, [cardId]: pinned }));
+  }, []);
+
+  const handleDismissStarted = useCallback((cardId: string) => {
+    setDismissingIds((current) => new Set([...current, cardId]));
+    window.setTimeout(() => {
+      setRemovedIds((current) => new Set([...current, cardId]));
+    }, DISMISS_ANIMATION_MS);
+  }, []);
+
+  const handleDismissFailed = useCallback((cardId: string) => {
+    setDismissingIds((current) => {
+      const next = new Set(current);
+      next.delete(cardId);
+      return next;
+    });
+    setRemovedIds((current) => {
+      const next = new Set(current);
+      next.delete(cardId);
+      return next;
+    });
+  }, []);
 
   return (
-    <section data-briefs-list style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 980 }}>
+    <section data-briefs-list style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: "none" }}>
       <header style={{ display: "grid", gap: 4, marginBottom: 4 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 650, lineHeight: 1.2, maxWidth: 520 }}>
           Recent work and next steps
@@ -579,29 +750,77 @@ function PageBody({ data, onChanged }: { data: PageData; onChanged: () => void }
           Sorted by the latest meaningful activity across the work areas Briefing is tracking.
         </div>
       </header>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div data-briefs-card-grid style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", alignItems: "start", gap: 12, width: "100%" }}>
         {cards.map((card) => (
-          <BriefCardView key={card.id} card={card} onChanged={onChanged} />
+          <BriefCardView
+            key={card.id}
+            card={card}
+            dismissing={dismissingIds.has(card.id)}
+            onChanged={onChanged}
+            onPinChanged={handlePinChanged}
+            onPinFailed={handlePinFailed}
+            onDismissStarted={handleDismissStarted}
+            onDismissFailed={handleDismissFailed}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-export function BriefCardView({ card, onChanged }: { card: BriefCard; onChanged: () => void }) {
+function filterIdSet(current: Set<string>, allowed: Set<string>): Set<string> {
+  const next = new Set<string>();
+  for (const id of current) {
+    if (allowed.has(id)) next.add(id);
+  }
+  return next.size === current.size ? current : next;
+}
+
+export function BriefCardView({
+  card,
+  dismissing = false,
+  onChanged,
+  onPinChanged,
+  onPinFailed,
+  onDismissStarted,
+  onDismissFailed,
+}: {
+  card: BriefCard;
+  dismissing?: boolean;
+  onChanged: () => void;
+  onPinChanged?: (cardId: string, pinned: boolean) => void;
+  onPinFailed?: (cardId: string, pinned: boolean) => void;
+  onDismissStarted?: (cardId: string) => void;
+  onDismissFailed?: (cardId: string) => void;
+}) {
   const pin = usePluginAction("pin-card");
+  const dismiss = usePluginAction("dismiss-card");
   const toast = usePluginToast();
   const taskRows = useMemo(() => dedupeTaskRows(card.snapshot.taskRows), [card.snapshot.taskRows]);
 
   const togglePin = useCallback(async () => {
+    const nextPinned = !card.pinned;
+    onPinChanged?.(card.id, nextPinned);
     try {
-      await pin({ companyId: card.companyId, userId: card.userId, cardId: card.id, pinned: !card.pinned });
-      onChanged();
+      await pin({ companyId: card.companyId, userId: card.userId, cardId: card.id, pinned: nextPinned });
     } catch (err) {
+      onPinFailed?.(card.id, card.pinned);
       const message = err instanceof Error ? err.message : "Could not update pin";
       toast({ tone: "error", title: "Pin failed", body: message });
     }
-  }, [pin, card, onChanged, toast]);
+  }, [pin, card, onPinChanged, onPinFailed, toast]);
+
+  const dismissCard = useCallback(async () => {
+    onDismissStarted?.(card.id);
+    try {
+      await dismiss({ companyId: card.companyId, userId: card.userId, cardId: card.id });
+    } catch (err) {
+      onDismissFailed?.(card.id);
+      const message = err instanceof Error ? err.message : "Could not dismiss card";
+      toast({ tone: "error", title: "Dismiss failed", body: message });
+      onChanged();
+    }
+  }, [dismiss, card, onDismissStarted, onDismissFailed, onChanged, toast]);
 
   return (
     <article
@@ -618,6 +837,12 @@ export function BriefCardView({ card, onChanged }: { card: BriefCard; onChanged:
         flexDirection: "column",
         gap: 10,
         minWidth: 0,
+        opacity: dismissing ? 0 : 1,
+        transform: dismissing ? "translateY(-4px)" : "translateY(0)",
+        maxHeight: dismissing ? 0 : 1200,
+        overflow: "hidden",
+        transition: `opacity ${DISMISS_ANIMATION_MS}ms ease, transform ${DISMISS_ANIMATION_MS}ms ease, max-height ${DISMISS_ANIMATION_MS}ms ease, padding ${DISMISS_ANIMATION_MS}ms ease, border-color ${DISMISS_ANIMATION_MS}ms ease`,
+        pointerEvents: dismissing ? "none" : "auto",
       }}
     >
       <header style={{ display: "flex", alignItems: "flex-start", gap: 8, minWidth: 0 }}>
@@ -625,6 +850,7 @@ export function BriefCardView({ card, onChanged }: { card: BriefCard; onChanged:
         <h3 style={{ margin: 0, flex: 1, fontSize: 15, fontWeight: 650, lineHeight: 1.28, overflow: "hidden", display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: 3 }}>
           {card.title}
         </h3>
+        <DismissButton onDismiss={dismissCard} />
       </header>
       <MetaRow card={card} />
       <SummarySlot card={card} />
@@ -654,9 +880,38 @@ function PinButton({ pinned, onToggle }: { pinned: boolean; onToggle: () => void
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
+        transform: pinned ? "scale(1.04)" : "scale(1)",
+        transition: "background 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease",
       }}
     >
       {pinned ? "★" : "☆"}
+    </button>
+  );
+}
+
+function DismissButton({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onDismiss}
+      aria-label="Dismiss briefing card"
+      title="Dismiss"
+      style={{
+        height: 22,
+        padding: "0 7px",
+        flexShrink: 0,
+        borderRadius: 6,
+        border: `1px solid ${tokens.border}`,
+        background: "transparent",
+        color: tokens.muted,
+        fontSize: 11,
+        lineHeight: 1,
+        cursor: "pointer",
+        fontFamily: fontStack,
+        transition: "background 140ms ease, color 140ms ease, border-color 140ms ease",
+      }}
+    >
+      Dismiss
     </button>
   );
 }
@@ -707,14 +962,14 @@ function briefSummaryParagraphs(card: BriefCard): string[] {
 function SourceRows({ rows }: { rows: BriefTaskRow[] }) {
   if (rows.length === 0) return null;
   return (
-    <div data-briefs-source-rows style={{ margin: 0, padding: "2px 0 0", display: "flex", flexDirection: "column", borderTop: `1px solid ${tokens.border}` }}>
+    <div data-briefs-source-rows style={{ margin: 0, padding: "2px 0 0", display: "flex", flexDirection: "column", gap: 1 }}>
       {rows.map((row) => (
         row.kind === "issue" && (row.identifier || row.issueId) ? (
           <PluginIssueRow
             key={sourceRowKey(row)}
             issue={taskRowToIssue(row)}
             trailingMeta={formatRelative(row.eventAt)}
-            className="!pl-0 !pr-0"
+            className="!border-b-0 !pl-0 !pr-0 !py-1.5"
             disableIssueQuicklook={false}
           />
         ) : (
@@ -725,7 +980,6 @@ function SourceRows({ rows }: { rows: BriefTaskRow[] }) {
               alignItems: "center",
               gap: 8,
               padding: "7px 0",
-              borderBottom: `1px solid ${tokens.border}`,
               fontSize: 12,
               minWidth: 0,
             }}

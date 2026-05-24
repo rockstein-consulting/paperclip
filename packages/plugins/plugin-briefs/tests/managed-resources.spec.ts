@@ -23,6 +23,7 @@ const bridgeActor = {
 describe("Briefs managed resources", () => {
   it("declares the Briefing Analyst, skills, routines, and agent tools", () => {
     expect(manifest.capabilities).toEqual(expect.arrayContaining([
+      "projects.managed",
       "agents.resume",
       "agents.managed",
       "skills.managed",
@@ -51,10 +52,25 @@ describe("Briefs managed resources", () => {
     expect(manifest.agents?.[0]?.instructions?.content).toContain("executive standup updates");
     expect(manifest.agents?.[0]?.instructions?.content).toContain("Do not put issue identifiers");
     expect(manifest.agents?.[0]?.instructions?.content).toContain("focus more on what is left to do");
+    expect(manifest.agents?.[0]?.instructions?.content).toContain("Dismissed cards are intentional user feedback");
+    expect(manifest.skills?.find((skill) => skill.skillKey === "briefs-discover-cards")?.markdown).toContain("includeHidden: true");
     expect(manifest.skills?.find((skill) => skill.skillKey === "briefs-update-cards")?.markdown).toContain("refresh every visible card");
+    expect(manifest.skills?.find((skill) => skill.skillKey === "briefs-update-cards")?.markdown).toContain("Hidden cards were dismissed by the user");
+    expect(manifest.routines?.find((routine) => routine.routineKey === "briefs-discover-cards")?.description).toContain("skip hidden/dismissed roots");
     expect(manifest.routines?.find((routine) => routine.routineKey === "briefs-update-cards")?.description).toContain("manual/API runs are rewrite passes");
     expect(manifest.skills?.map((skill) => skill.skillKey)).toEqual([...BRIEFS_MANAGED_SKILL_KEYS]);
+    expect(manifest.projects).toEqual([
+      expect.objectContaining({
+        projectKey: BRIEFS_PROJECT_KEY,
+        displayName: "Briefs",
+        status: "in_progress",
+      }),
+    ]);
     expect(manifest.routines?.map((routine) => routine.routineKey)).toEqual([...BRIEFS_MANAGED_ROUTINE_KEYS]);
+    expect(manifest.routines?.every((routine) =>
+      routine.projectRef?.resourceKind === "project"
+      && routine.projectRef.resourceKey === BRIEFS_PROJECT_KEY
+    )).toBe(true);
     expect(manifest.routines?.find((routine) => routine.routineKey === MANUAL_REFRESH_ROUTINE_KEY)).toMatchObject({
       assigneeRef: { resourceKind: "agent", resourceKey: BRIEFING_ANALYST_AGENT_KEY },
       projectRef: { resourceKind: "project", resourceKey: BRIEFS_PROJECT_KEY },
@@ -131,7 +147,7 @@ describe("Briefs managed resources", () => {
       managedProject: { status: string; projectId: string | null };
       managedAgent: { status: string; agentId: string | null };
       managedSkills: Array<{ status: string; skillId: string | null }>;
-      managedRoutines: Array<{ status: string; routineId: string | null; missingRefs: unknown[] }>;
+      managedRoutines: Array<{ status: string; routineId: string | null; routine: { projectId: string | null } | null; missingRefs: unknown[] }>;
     }>("reconcile-managed-resources", { companyId });
 
     expect(result.managedProject).toMatchObject({ status: "created" });
@@ -141,8 +157,73 @@ describe("Briefs managed resources", () => {
     for (const routine of result.managedRoutines) {
       expect(routine.status).toBe("created");
       expect(routine.routineId).toBeTruthy();
+      expect(routine.routine?.projectId).toBe(result.managedProject.projectId);
       expect(routine.missingRefs).toEqual([]);
     }
+  });
+
+  it("reconciles managed routines through the plugin-managed project from settings", async () => {
+    const harness = createTestHarness({ manifest });
+    await plugin.definition.setup?.(harness.ctx);
+
+    const result = await harness.performAction<{
+      managedProject: { status: string; projectId: string | null };
+      managedAgent: { status: string; agentId: string | null };
+      managedRoutines: Array<{ status: string; routineId: string | null; routine: { projectId: string | null } | null; missingRefs: unknown[] }>;
+    }>("reconcile-managed-routines", { companyId });
+
+    expect(result.managedProject).toMatchObject({ status: "created" });
+    expect(result.managedProject.projectId).toBeTruthy();
+    expect(result.managedAgent.agentId).toBeTruthy();
+    expect(result.managedRoutines).toHaveLength(3);
+    for (const routine of result.managedRoutines) {
+      expect(routine.status).toBe("created");
+      expect(routine.routine?.projectId).toBe(result.managedProject.projectId);
+      expect(routine.missingRefs).toEqual([]);
+    }
+  });
+
+  it("ignores caller-supplied project overrides when repairing Briefs routines", async () => {
+    const harness = createTestHarness({ manifest });
+    await plugin.definition.setup?.(harness.ctx);
+
+    const routine = await harness.performAction<{
+      status: string;
+      routineId: string | null;
+      routine: { projectId: string | null } | null;
+      missingRefs: unknown[];
+    }>("reconcile-managed-routine", {
+      companyId,
+      routineKey: MANUAL_REFRESH_ROUTINE_KEY,
+      projectId: "operator-selected-project",
+    });
+    const managedProject = await harness.ctx.projects.managed.get(BRIEFS_PROJECT_KEY, companyId);
+
+    expect(routine.status).toBe("created");
+    expect(routine.routineId).toBeTruthy();
+    expect(routine.routine?.projectId).toBe(managedProject.projectId);
+    expect(routine.routine?.projectId).not.toBe("operator-selected-project");
+    expect(routine.missingRefs).toEqual([]);
+  });
+
+  it("repairs legacy Briefs routines that are not linked to the plugin-managed project", async () => {
+    const harness = createTestHarness({ manifest });
+    await plugin.definition.setup?.(harness.ctx);
+    const managedProject = await harness.ctx.projects.managed.reconcile(BRIEFS_PROJECT_KEY, companyId);
+    const managedAgent = await harness.ctx.agents.managed.reconcile(BRIEFING_ANALYST_AGENT_KEY, companyId);
+    const legacy = await harness.ctx.routines.managed.reconcile(MANUAL_REFRESH_ROUTINE_KEY, companyId, {
+      assigneeAgentId: managedAgent.agentId,
+      projectId: "legacy-project",
+    });
+    expect(legacy.routine?.projectId).toBe("legacy-project");
+
+    const result = await harness.performAction<{
+      managedRoutines: Array<{ status: string; resourceKey: string; routine: { projectId: string | null } | null }>;
+    }>("reconcile-managed-resources", { companyId });
+    const repaired = result.managedRoutines.find((routine) => routine.resourceKey === MANUAL_REFRESH_ROUTINE_KEY);
+
+    expect(repaired?.status).toBe("reset");
+    expect(repaired?.routine?.projectId).toBe(managedProject.projectId);
   });
 
   it("resumes the managed analyst before running user briefing routines", async () => {
@@ -153,12 +234,18 @@ describe("Briefs managed resources", () => {
     const before = await harness.ctx.agents.managed.get(BRIEFING_ANALYST_AGENT_KEY, companyId);
     expect(before.agent?.status).toBe("paused");
 
+    const managedProject = await harness.ctx.projects.managed.get(BRIEFS_PROJECT_KEY, companyId);
     const result = await harness.performAction<{
       runs: Array<{ status: string; triggerPayload: { variables: Record<string, unknown> } | null }>;
-    }>("run-briefing-routines", { companyId }, { actor: bridgeActor });
+    }>("run-briefing-routines", { companyId, projectId: "operator-selected-project" }, { actor: bridgeActor });
 
     const after = await harness.ctx.agents.managed.get(BRIEFING_ANALYST_AGENT_KEY, companyId);
     expect(after.agent?.status).toBe("idle");
+    for (const routineKey of BRIEFS_MANAGED_ROUTINE_KEYS.filter((routineKey) => routineKey !== MANUAL_REFRESH_ROUTINE_KEY)) {
+      const routine = await harness.ctx.routines.managed.get(routineKey, companyId);
+      expect(routine.routine?.projectId).toBe(managedProject.projectId);
+      expect(routine.routine?.projectId).not.toBe("operator-selected-project");
+    }
     expect(result.runs).toHaveLength(2);
     expect(result.runs.map((run) => run.status)).toEqual(["queued", "queued"]);
     expect(result.runs.map((run) => run.triggerPayload?.variables?.userId)).toEqual([
@@ -180,9 +267,14 @@ describe("Briefs managed resources", () => {
       cardId: "card-1",
       pinned: true,
     }, context)).rejects.toThrow("Briefs user scope mismatch");
+    await expect(harness.performAction("dismiss-card", {
+      ...victimParams,
+      cardId: "card-1",
+    }, context)).rejects.toThrow("Briefs user scope mismatch");
     await expect(harness.performAction("update-preferences", {
       ...victimParams,
       cadence: "daily",
     }, context)).rejects.toThrow("Briefs user scope mismatch");
   });
+
 });

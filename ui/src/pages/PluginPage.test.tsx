@@ -169,7 +169,7 @@ describe("PluginPage", () => {
     await flushReact();
   });
 
-  it("hides the Back button for the Briefs dashboard while keeping settings available", async () => {
+  it("hides the host Back and settings buttons for the Briefs dashboard", async () => {
     mockParams.pluginRoutePath = "briefs";
     mockPluginsApi.listUiContributions.mockResolvedValue([
       pageContribution({
@@ -192,7 +192,7 @@ describe("PluginPage", () => {
 
     expect(container.textContent).not.toContain("Back");
     expect(container.querySelector('a[href="/PAP/dashboard"]')).toBeNull();
-    expect(container.querySelector('a[href="/instance/settings/plugins/plugin-briefs"]')).not.toBeNull();
+    expect(container.querySelector('a[href="/instance/settings/plugins/plugin-briefs"]')).toBeNull();
 
     root.unmount();
     await flushReact();

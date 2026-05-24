@@ -161,20 +161,18 @@ export function PluginPage() {
     return <Navigate to={settingsPath} replace />;
   }
 
-  const hideBackButton = pageSlot.pluginKey === "paperclipai.plugin-briefs";
+  const isBriefsDashboard = pageSlot.pluginKey === "paperclipai.plugin-briefs";
 
   return (
     <div className="space-y-4">
-      {!routeSidebarActive && (
+      {!routeSidebarActive && !isBriefsDashboard && (
         <div className="flex items-center justify-between gap-2">
-          {hideBackButton ? <span aria-hidden /> : (
-            <Button variant="ghost" size="sm" asChild>
-              <Link to={companyPrefix ? `/${companyPrefix}/dashboard` : "/dashboard"}>
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back
-              </Link>
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={companyPrefix ? `/${companyPrefix}/dashboard` : "/dashboard"}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Link>
+          </Button>
           <Button variant="ghost" size="icon-sm" asChild title={`${pageSlot.pluginDisplayName} settings`}>
             <Link to={`/instance/settings/plugins/${pageSlot.pluginId}`} aria-label={`${pageSlot.pluginDisplayName} settings`}>
               <Settings className="h-4 w-4" />

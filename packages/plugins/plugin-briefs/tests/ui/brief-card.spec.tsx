@@ -9,8 +9,8 @@ vi.mock("@paperclipai/plugin-sdk/ui", () => {
       linkProps: (to: string) => ({ href: to, onClick: () => {} }),
     }),
     usePluginAction: () => vi.fn(async () => ({ ok: true })),
-    IssueRow: ({ issue, trailingMeta }: { issue: { identifier?: string | null; title: string }; trailingMeta?: ReactNode }) => (
-      <a data-plugin-issue-row={issue.identifier ?? ""} href={`/issues/${issue.identifier ?? ""}`}>{issue.identifier} {issue.title} {trailingMeta}</a>
+    IssueRow: ({ issue, trailingMeta, className }: { issue: { identifier?: string | null; title: string }; trailingMeta?: ReactNode; className?: string }) => (
+      <a data-plugin-issue-row={issue.identifier ?? ""} className={className} href={`/issues/${issue.identifier ?? ""}`}>{issue.identifier} {issue.title} {trailingMeta}</a>
     ),
     usePluginData: () => ({ data: null, loading: false, error: null, refresh: () => {} }),
     usePluginToast: () => vi.fn(),
@@ -117,5 +117,14 @@ describe("BriefCardView", () => {
     expect(renderCard(pinned)).toMatch(/aria-label="Unpin card"/);
     const unpinned = makeCard({ pinned: false });
     expect(renderCard(unpinned)).toMatch(/aria-label="Pin card"/);
+  });
+
+  it("renders a dismiss action and removes issue-row bottom dividers", () => {
+    const card = makeCard();
+    const html = renderCard(card);
+
+    expect(html).toContain('aria-label="Dismiss briefing card"');
+    expect(html).toContain("Dismiss");
+    expect(html).toContain("!border-b-0");
   });
 });
