@@ -152,6 +152,7 @@ export function BoardChat() {
   const [sending, setSending] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [statusText, setStatusText] = useState("");
+  const [errorText, setErrorText] = useState("");
   const [boardIssueId, setBoardIssueId] = useState<string | null>(null);
   const [elapsedSec, setElapsedSec] = useState(0);
   const [optimisticMessage, setOptimisticMessage] = useState<string | null>(null);
@@ -451,6 +452,7 @@ export function BoardChat() {
       setSending(true);
       setInput("");
       setStreamingText("");
+      setErrorText("");
       setStatusText("Connecting...");
 
       try {
@@ -499,6 +501,12 @@ export function BoardChat() {
                 setStatusText(event.text);
               } else if (event.type === "start" && event.issueId) {
                 setBoardIssueId(event.issueId);
+              } else if (event.type === "error") {
+                setErrorText(
+                  event.message ||
+                    "The board assistant couldn't respond. Please try again.",
+                );
+                setStatusText("");
               } else if (event.type === "done") {
                 if (event.issueId) {
                   queryClient.invalidateQueries({
@@ -523,6 +531,9 @@ export function BoardChat() {
       } catch (err) {
         console.error("Board chat error:", err);
         setStatusText("");
+        setErrorText(
+          "The board assistant is unavailable right now. Please try again in a moment.",
+        );
       } finally {
         setSending(false);
         inputRef.current?.focus();
@@ -770,6 +781,24 @@ export function BoardChat() {
                   {elapsedSec > 0 && (
                     <span className="opacity-50">{elapsedSec.toFixed(1)}s</span>
                   )}
+                </div>
+              )}
+
+              {/* Error notice — surfaced when the stream endpoint fails so
+                  the message doesn't silently sit with no response. */}
+              {errorText && !sending && (
+                <div
+                  role="alert"
+                  className="flex justify-start"
+                >
+                  <div
+                    className={cn(
+                      boardChatBubbleShell,
+                      "bg-destructive/10 border border-destructive/30 text-destructive [border-radius:14px_14px_14px_4px]",
+                    )}
+                  >
+                    {errorText}
+                  </div>
                 </div>
               )}
 
