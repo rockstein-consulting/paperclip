@@ -93,9 +93,15 @@ export function readBrowseStateFromSearch(search: string): FileViewerBrowseState
 interface FileViewerProviderProps {
   issueId: string;
   children: ReactNode;
+  enabled?: boolean;
 }
 
-export function FileViewerProvider({ issueId, children }: FileViewerProviderProps) {
+export function FileViewerProvider({ issueId, children, enabled = true }: FileViewerProviderProps) {
+  if (!enabled) return <>{children}</>;
+  return <EnabledFileViewerProvider issueId={issueId}>{children}</EnabledFileViewerProvider>;
+}
+
+function EnabledFileViewerProvider({ issueId, children }: Omit<FileViewerProviderProps, "enabled">) {
   const location = useLocation();
   const navigate = useNavigate();
   const state = useMemo(() => readFileViewerStateFromSearch(location.search), [location.search]);

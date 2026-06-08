@@ -75,6 +75,7 @@ const mockPushToast = vi.hoisted(() => vi.fn());
 const mockIssuesListRender = vi.hoisted(() => vi.fn());
 const mockIssueChatThreadRender = vi.hoisted(() => vi.fn());
 const mockImageGalleryRender = vi.hoisted(() => vi.fn());
+const mockIssueWorkspaceCardRender = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/issues", () => ({
   issuesApi: mockIssuesApi,
@@ -282,7 +283,10 @@ vi.mock("../components/IssueRunLedger", () => ({
 }));
 
 vi.mock("../components/IssueWorkspaceCard", () => ({
-  IssueWorkspaceCard: () => <div>Workspace</div>,
+  IssueWorkspaceCard: (props: { onBrowseFiles?: () => void; onOpenFileByPath?: () => void }) => {
+    mockIssueWorkspaceCardRender(props);
+    return <div>Workspace</div>;
+  },
 }));
 
 vi.mock("../components/ImageGalleryModal", () => ({
@@ -934,11 +938,13 @@ describe("IssueDetail", () => {
     });
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({
       enableIssuePlanDecompositions: false,
+      enableExperimentalFileViewer: false,
     });
     mockIssuesApi.listAcceptedPlanDecompositions.mockResolvedValue([]);
     mockIssuesListRender.mockClear();
     mockIssueChatThreadRender.mockClear();
     mockImageGalleryRender.mockClear();
+    mockIssueWorkspaceCardRender.mockClear();
   });
 
   afterEach(async () => {
@@ -994,10 +1000,55 @@ describe("IssueDetail", () => {
     expect(mockIssuesApi.listAcceptedPlanDecompositions).not.toHaveBeenCalled();
   });
 
+  it("hides file viewer entry points by default", async () => {
+    mockIssuesApi.get.mockResolvedValue(createIssue());
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail />
+        </QueryClientProvider>,
+      );
+    });
+
+    await flushReact();
+    await flushReact();
+
+    expect(container.querySelector('[aria-label="Open file in this issue"]')).toBeNull();
+    const latestWorkspaceProps = mockIssueWorkspaceCardRender.mock.calls.at(-1)?.[0];
+    expect(latestWorkspaceProps?.onBrowseFiles).toBeUndefined();
+    expect(latestWorkspaceProps?.onOpenFileByPath).toBeUndefined();
+  });
+
+  it("shows file viewer entry points when the experimental flag is enabled", async () => {
+    mockIssuesApi.get.mockResolvedValue(createIssue());
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({
+      enableIssuePlanDecompositions: false,
+      enableExperimentalFileViewer: true,
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <IssueDetail />
+        </QueryClientProvider>,
+      );
+    });
+
+    await flushReact();
+    await flushReact();
+
+    expect(container.querySelector('[aria-label="Open file in this issue"]')).not.toBeNull();
+    const latestWorkspaceProps = mockIssueWorkspaceCardRender.mock.calls.at(-1)?.[0];
+    expect(latestWorkspaceProps?.onBrowseFiles).toEqual(expect.any(Function));
+    expect(latestWorkspaceProps?.onOpenFileByPath).toEqual(expect.any(Function));
+  });
+
   it("shows the plan decomposition panel when the experimental flag is enabled", async () => {
     mockIssuesApi.get.mockResolvedValue(createIssue());
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({
       enableIssuePlanDecompositions: true,
+      enableExperimentalFileViewer: false,
     });
     mockIssuesApi.listAcceptedPlanDecompositions.mockResolvedValue([
       {

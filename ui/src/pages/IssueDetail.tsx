@@ -1520,6 +1520,7 @@ export function IssueDetail() {
   const feedbackDataSharingPreference = instanceGeneralSettings?.feedbackDataSharingPreference ?? "prompt";
   const showPlanDecompositionsSection =
     instanceExperimentalSettings?.enableIssuePlanDecompositions === true;
+  const fileViewerEnabled = instanceExperimentalSettings?.enableExperimentalFileViewer === true;
   const { orderedProjects } = useProjectOrder({
     projects: projects ?? [],
     companyId: selectedCompanyId,
@@ -2952,6 +2953,7 @@ export function IssueDetail() {
         setPendingCommentComposerFocusKey((current) => current + 1);
       }
       if (action === "open_file_viewer") {
+        if (!fileViewerEnabled) return;
         event.preventDefault();
         event.stopPropagation();
         setFileViewerPromptOpen(true);
@@ -2967,7 +2969,7 @@ export function IssueDetail() {
       document.removeEventListener("focusin", handleFocusIn, true);
       document.removeEventListener("keydown", handleKeyDown, true);
     };
-  }, [keyboardShortcutsEnabled, navigate, sourceBreadcrumb.href]);
+  }, [fileViewerEnabled, keyboardShortcutsEnabled, navigate, sourceBreadcrumb.href]);
 
   useEffect(() => {
     const hash = location.hash;
@@ -3016,6 +3018,7 @@ export function IssueDetail() {
   }, [detailTab, pendingCommentComposerFocusKey]);
 
   useEffect(() => {
+    if (!fileViewerEnabled) return;
     const handleOpenFileViewer = () => {
       setFileViewerPromptOpen(true);
     };
@@ -3026,7 +3029,7 @@ export function IssueDetail() {
         handleOpenFileViewer as EventListener,
       );
     };
-  }, []);
+  }, [fileViewerEnabled]);
 
   const promotedOutputAttachmentIds = useMemo(() => getPromotedOutputAttachmentIds(workProducts), [workProducts]);
   const attachmentList = useMemo(
@@ -3469,7 +3472,7 @@ export function IssueDetail() {
   );
 
   return (
-    <FileViewerProvider issueId={issue.id}>
+    <FileViewerProvider issueId={issue.id} enabled={fileViewerEnabled}>
     <div className="max-w-3xl space-y-6">
       {/* Parent chain breadcrumb */}
       {ancestors.length > 0 && (
@@ -3719,15 +3722,17 @@ export function IssueDetail() {
                 <Archive className="h-4 w-4" />
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setFileViewerPromptOpen(true)}
-              title="Open file... (g f)"
-              aria-label="Open file in this issue"
-            >
-              <FileCode2 className="h-4 w-4" />
-            </Button>
+            {fileViewerEnabled ? (
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setFileViewerPromptOpen(true)}
+                title="Open file... (g f)"
+                aria-label="Open file in this issue"
+              >
+                <FileCode2 className="h-4 w-4" />
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="icon-xs"
@@ -4052,11 +4057,11 @@ export function IssueDetail() {
         issue={issue}
         project={resolvedProject}
         onUpdate={(data) => updateIssue.mutate(data)}
-        onBrowseFiles={() => setFileViewerPromptOpen(true)}
-        onOpenFileByPath={() => setFileViewerPromptOpen(true)}
+        onBrowseFiles={fileViewerEnabled ? () => setFileViewerPromptOpen(true) : undefined}
+        onOpenFileByPath={fileViewerEnabled ? () => setFileViewerPromptOpen(true) : undefined}
       />
 
-      {issue.workProducts && issue.workProducts.length > 0 && (() => {
+      {fileViewerEnabled && issue.workProducts && issue.workProducts.length > 0 && (() => {
         const workProductsWithFileRefs = issue.workProducts
           .map((product) => ({ product, fileRef: extractWorkspaceFileRefFromWorkProduct(product) }))
           .filter(({ fileRef }) => fileRef !== null);
@@ -4397,11 +4402,13 @@ export function IssueDetail() {
           </ScrollArea>
         </SheetContent>
       </Sheet>
-      <IssueFileViewer
-        issueId={issue.id}
-        promptOpen={fileViewerPromptOpen}
-        onPromptOpenChange={setFileViewerPromptOpen}
-      />
+      {fileViewerEnabled ? (
+        <IssueFileViewer
+          issueId={issue.id}
+          promptOpen={fileViewerPromptOpen}
+          onPromptOpenChange={setFileViewerPromptOpen}
+        />
+      ) : null}
       <ScrollToBottom />
     </div>
     </FileViewerProvider>

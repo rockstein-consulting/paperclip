@@ -43,7 +43,7 @@ export function WorkspaceFileMarkdownBody({
 
   return (
     <div onClick={handleClick}>
-      <MarkdownBody {...props} linkWorkspaceFileRefs>{children}</MarkdownBody>
+      <MarkdownBody {...props} linkWorkspaceFileRefs={!!viewer}>{children}</MarkdownBody>
     </div>
   );
 }
