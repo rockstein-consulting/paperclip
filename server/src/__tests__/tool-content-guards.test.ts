@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalToolArguments,
   readSignedToolArguments,
+  resolveToolActionSigningSecret,
   signToolArguments,
   ToolContentValidationError,
   validateToolContent,
@@ -9,12 +10,15 @@ import {
 } from "../services/tool-content-guards.js";
 
 describe("tool content guards", () => {
+  const signingSecret = "test-tool-action-signing-secret";
+
   it("signs canonical arguments and rejects tampered arguments", () => {
     const canonicalArguments = canonicalToolArguments({ body: "hello", noteId: "n1" });
     const signedArguments = signToolArguments({
       invocationId: "invocation-1",
       toolName: "mcp-remote-fixture:update_note",
       canonicalArguments,
+      signingSecret,
     });
 
     expect(
@@ -23,6 +27,7 @@ describe("tool content guards", () => {
         invocationId: "invocation-1",
         toolName: "mcp-remote-fixture:update_note",
         canonicalArguments,
+        signingSecret,
       }),
     ).toBe(true);
     expect(
@@ -31,13 +36,24 @@ describe("tool content guards", () => {
         invocationId: "invocation-1",
         toolName: "mcp-remote-fixture:update_note",
         canonicalArguments: canonicalToolArguments({ body: "tampered", noteId: "n1" }),
+        signingSecret,
       }),
     ).toBe(false);
     expect(readSignedToolArguments({
       signedArguments,
       invocationId: "invocation-1",
       toolName: "mcp-remote-fixture:update_note",
+      signingSecret,
     })).toEqual({ body: "hello", noteId: "n1" });
+  });
+
+  it("requires a dedicated tool action signing secret", () => {
+    expect(() =>
+      resolveToolActionSigningSecret({
+        PAPERCLIP_AGENT_JWT_SECRET: "agent-jwt-secret",
+        BETTER_AUTH_SECRET: "auth-secret",
+      }),
+    ).toThrow("PAPERCLIP_TOOL_ACTION_SIGNING_SECRET");
   });
 
   it("redacts sensitive argument values before summarizing them", () => {

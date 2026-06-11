@@ -15,13 +15,16 @@ const SCREENSHOT_DIR = "test-results";
 const APP_PREFIX = `qa10820-${Date.now().toString(36)}`;
 
 async function discoverCompany(request: APIRequestContext): Promise<SeedResult> {
-  const res = await request.get("/api/companies");
-  expect(res.ok(), `GET /api/companies failed: ${res.status()}`).toBe(true);
-  const body = await res.json();
-  const list = Array.isArray(body) ? body : body.companies;
-  const company = list?.[0];
-  expect(company?.id, "expected a seeded company").toBeTruthy();
-  return { companyId: company.id, prefix: company.issuePrefix };
+  const res = await request.post("/api/companies", {
+    data: { name: `PAP-10820 applications CRUD ${Date.now()}` },
+  });
+  expect(res.ok(), `create company failed ${res.status()}: ${await res.text()}`).toBe(true);
+  const company = await res.json();
+  expect(company?.id, "expected created company id").toBeTruthy();
+  return {
+    companyId: company.id,
+    prefix: company.issuePrefix ?? company.prefix ?? company.urlKey ?? "E2E",
+  };
 }
 
 async function createApplication(
@@ -72,6 +75,11 @@ test.describe.serial("PAP-10820 applications CRUD", () => {
 
   test.beforeAll(async ({ request }) => {
     seed = await discoverCompany(request);
+  });
+
+  test.afterAll(async ({ request }) => {
+    if (!seed?.companyId) return;
+    await request.delete(`/api/companies/${seed.companyId}`).catch(() => undefined);
   });
 
   test("Phase 2: edit + duplicate-name conflict", async ({ page, request }) => {

@@ -33,8 +33,10 @@ import {
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const testToolActionSigningSecret = "test-tool-action-signing-secret";
 
 type Db = ReturnType<typeof createDb>;
+type ToolGatewayServiceOptions = NonNullable<Parameters<typeof createToolGatewayService>[1]>;
 
 async function createCompany(db: Db) {
   return db
@@ -135,7 +137,14 @@ function tamperToken(token: string) {
   return `${token.slice(0, -1)}${replacement}`;
 }
 
-function createGatewayRouteApp(db: Db, gateway = createToolGatewayService(db)) {
+function createTestToolGatewayService(db: Db, options: ToolGatewayServiceOptions = {}) {
+  return createToolGatewayService(db, {
+    ...options,
+    toolActionSigningSecret: options.toolActionSigningSecret ?? testToolActionSigningSecret,
+  });
+}
+
+function createGatewayRouteApp(db: Db, gateway = createTestToolGatewayService(db)) {
   const app = express();
   app.use(express.json());
   app.use("/api", toolGatewayRoutes(db, gateway));
@@ -179,7 +188,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { issue, run } = await createIssueAndRun(db, company.id, agent.id);
-    const gateway = createToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
+    const gateway = createTestToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -220,7 +229,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       "mcp-stdio-fixture:increment_counter",
       "mcp-stdio-fixture:runtime_status",
     ]);
-    const gateway = createToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
+    const gateway = createTestToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -285,7 +294,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const { issue, run } = await createIssueAndRun(db, company.id, agent.id);
     await allowToolsForAgent(db, company.id, agent.id, ["mcp-remote-fixture:add"]);
 
-    const gatewayA = createToolGatewayService(db);
+    const gatewayA = createTestToolGatewayService(db);
     const session = await gatewayA.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -305,7 +314,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     });
     expect(JSON.stringify(storedSession)).not.toContain(session.token);
 
-    const gatewayB = createToolGatewayService(db);
+    const gatewayB = createTestToolGatewayService(db);
     await expect(gatewayB.listToolsForSession(session.token)).resolves.toEqual([
       expect.objectContaining({ name: "mcp-remote-fixture:add" }),
     ]);
@@ -329,7 +338,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -360,7 +369,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -406,7 +415,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
 
     const expired = await gateway.createSession({
       companyId: company.id,
@@ -470,7 +479,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
     const oldSession = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -501,7 +510,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       "mcp-stdio-fixture:increment_counter",
       "mcp-stdio-fixture:runtime_status",
     ]);
-    const gateway = createToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
+    const gateway = createTestToolGatewayService(db, { runtimeSupervisor: { idleTtlMs: 25 } });
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -552,7 +561,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
     await allowToolsForAgent(db, company.id, agent.id, ["mcp-stdio-fixture:increment_counter"]);
-    const gateway = createToolGatewayService(db, { runtimeSupervisor: { restartBackoffMs: 0 } });
+    const gateway = createTestToolGatewayService(db, { runtimeSupervisor: { restartBackoffMs: 0 } });
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -583,7 +592,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const otherAgent = await createAgent(db, otherCompany.id);
     const { run: otherRun } = await createIssueAndRun(db, otherCompany.id, otherAgent.id);
     await allowToolsForAgent(db, otherCompany.id, otherAgent.id, ["mcp-stdio-fixture:increment_counter"]);
-    const gateway = createToolGatewayService(db, {
+    const gateway = createTestToolGatewayService(db, {
       runtimeSupervisor: { idleTtlMs: 10_000, maxHostSlots: 1, hostId: "shared-host" },
     });
     const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
@@ -629,7 +638,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
     await allowToolsForAgent(db, company.id, agent.id, ["mcp-stdio-fixture:increment_counter"]);
-    const hostedGateway = createToolGatewayService(db, {
+    const hostedGateway = createTestToolGatewayService(db, {
       deploymentMode: "authenticated",
       deploymentExposure: "public",
       trustedLocalStdioRuntimeHost: null,
@@ -647,7 +656,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       (error) => expectGatewayError(error, 403, "local_stdio_unavailable_in_public_mode"),
     );
 
-    const trustedGateway = createToolGatewayService(db, {
+    const trustedGateway = createTestToolGatewayService(db, {
       deploymentMode: "authenticated",
       deploymentExposure: "public",
       trustedLocalStdioRuntimeHost: "trusted-worker-1",
@@ -666,7 +675,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const agent = await createAgent(db, company.id);
     const { run } = await createIssueAndRun(db, company.id, agent.id);
     await allowToolsForAgent(db, company.id, agent.id, ["mcp-stdio-fixture:increment_counter"]);
-    const gateway = createToolGatewayService(db, {
+    const gateway = createTestToolGatewayService(db, {
       runtimeSupervisor: {
         restartBackoffMs: 0,
         restartStormLimit: 1,
@@ -708,7 +717,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       "mcp-stdio-fixture:increment_counter",
       "mcp-stdio-fixture:runtime_status",
     ]);
-    const gateway = createToolGatewayService(db, { runtimeSupervisor: { stuckSlotMs: 1, idleTtlMs: 10_000 } });
+    const gateway = createTestToolGatewayService(db, { runtimeSupervisor: { stuckSlotMs: 1, idleTtlMs: 10_000 } });
     const session = await gateway.createSession({ companyId: company.id, agentId: agent.id, runId: run.id });
     const first = await gateway.executeTool({
       sessionToken: session.token,
@@ -762,7 +771,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
       selectors: { toolName: "mcp-remote-fixture:update_note" },
       description: "Note updates require review.",
     });
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
     const session = await gateway.createSession({
       companyId: company.id,
       agentId: agent.id,
@@ -830,7 +839,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
         throw new Error("not used");
       },
     };
-    const gateway = createToolGatewayService(db, { pluginToolDispatcher: dispatcher });
+    const gateway = createTestToolGatewayService(db, { pluginToolDispatcher: dispatcher });
 
     await expect(gateway.listPluginToolsForAgent({ companyId: company.id, agentId: agent.id })).resolves.toEqual([]);
     await gateway.executePluginTool({
@@ -885,7 +894,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const otherCompany = await createCompany(db);
     const otherAgent = await createAgent(db, otherCompany.id);
     const { issue: otherIssue } = await createIssueAndRun(db, otherCompany.id, otherAgent.id);
-    const gateway = createToolGatewayService(db);
+    const gateway = createTestToolGatewayService(db);
 
     await gateway.createSession({
       companyId: company.id,

@@ -274,6 +274,7 @@ export function createToolGatewayService(
     deploymentExposure?: DeploymentExposure;
     trustedLocalStdioRuntimeHost?: string | null;
     runtimeSupervisor?: ToolRuntimeSupervisorOptions;
+    toolActionSigningSecret?: string;
   } = {},
 ) {
   const runtimeSupervisor = createToolRuntimeSupervisor(db, {
@@ -643,6 +644,7 @@ export function createToolGatewayService(
       invocationId: input.invocation.id,
       toolName: input.tool.name,
       canonicalArguments,
+      signingSecret: options.toolActionSigningSecret,
     });
     const previewMarkdown = [
       `Tool: \`${input.tool.name}\``,
@@ -1149,7 +1151,9 @@ export function createToolGatewayService(
             signedArguments: actionRequest.signedArguments,
             invocationId: invocation.id,
             toolName: invocation.toolName,
+            signingSecret: options.toolActionSigningSecret,
           }) ?? {}),
+          signingSecret: options.toolActionSigningSecret,
         })
       ) {
         throw new ToolGatewayHttpError(409, "Tool action request signature is invalid", "signed_arguments_invalid");
@@ -1204,13 +1208,14 @@ export function createToolGatewayService(
 
       const tool = findTool(input.tool);
 
+      const requestedParameters = input.parameters ?? {};
       const argumentValidation = validateToolContent({
-        value: input.parameters ?? {},
+        value: requestedParameters,
         direction: "arguments",
         sensitiveMode: "redact",
         promptInjectionMode: "ignore",
       });
-      let effectiveParameters = argumentValidation.value;
+      let effectiveParameters = requestedParameters;
       let effectiveArgumentsSummary = argumentValidation.summary;
 
       if (input.approvedActionRequestId) {
@@ -1324,6 +1329,7 @@ export function createToolGatewayService(
           signedArguments: actionRequest.signedArguments,
           invocationId: storedInvocation.id,
           toolName: storedInvocation.toolName,
+          signingSecret: options.toolActionSigningSecret,
         });
         if (!storedParameters) {
           throw new ToolGatewayHttpError(409, "Approved tool action arguments signature is invalid", "signed_arguments_invalid");
@@ -1342,6 +1348,7 @@ export function createToolGatewayService(
             invocationId: storedInvocation.id,
             toolName: storedInvocation.toolName,
             canonicalArguments: storedCanonical,
+            signingSecret: options.toolActionSigningSecret,
           })
         ) {
           throw new ToolGatewayHttpError(409, "Approved tool action arguments do not match reviewed hash", "signed_arguments_mismatch");
@@ -1360,7 +1367,7 @@ export function createToolGatewayService(
           throw new ToolGatewayHttpError(409, "Tool action request was already consumed", "action_already_consumed");
         }
         invocationId = storedInvocation.id as typeof invocationId;
-        effectiveParameters = storedArgumentValidation.value;
+        effectiveParameters = storedParameters;
         effectiveArgumentsSummary = storedArgumentValidation.summary;
         await db
           .update(toolInvocations)
@@ -1649,8 +1656,9 @@ export function createToolGatewayService(
         throw new ToolGatewayHttpError(404, `Tool "${input.tool}" is not a plugin tool`, "tool_not_found");
       }
 
+      const requestedParameters = input.parameters ?? {};
       const argumentValidation = validateToolContent({
-        value: input.parameters ?? {},
+        value: requestedParameters,
         direction: "arguments",
         sensitiveMode: "redact",
         promptInjectionMode: "ignore",
@@ -1659,7 +1667,7 @@ export function createToolGatewayService(
       const decisionInput = policyInputForTool({
         session: sessionLike,
         tool,
-        parameters: argumentValidation.value,
+        parameters: requestedParameters,
         consumeRateLimit: true,
       });
       const accessDecision = await policyService.decide(decisionInput);
@@ -1677,7 +1685,7 @@ export function createToolGatewayService(
           actionRequest: recorded.actionRequest,
           session: sessionLike,
           tool,
-          parameters: argumentValidation.value,
+          parameters: requestedParameters,
           argumentsSummary: argumentValidation.summary,
           policyDecision: accessDecision,
         });
@@ -1740,7 +1748,7 @@ export function createToolGatewayService(
 
       const startedAt = Date.now();
       try {
-        const result = await pluginToolDispatcher.executeTool(input.tool, argumentValidation.value, input.runContext);
+        const result = await pluginToolDispatcher.executeTool(input.tool, requestedParameters, input.runContext);
         const resultValidation = validateToolContent({
           value: result,
           direction: "result",
