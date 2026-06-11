@@ -2794,6 +2794,7 @@ export function companySkillService(db: Db) {
         eq(companySkillComments.companyId, companyId),
         eq(companySkillComments.companySkillId, skillId),
         eq(companySkillComments.id, commentId),
+        isNull(companySkillComments.deletedAt),
       ))
       .then((rows) => rows[0] ?? null);
     if (!existing) throw notFound("Skill comment not found");
@@ -2806,6 +2807,7 @@ export function companySkillService(db: Db) {
         eq(companySkillComments.companyId, companyId),
         eq(companySkillComments.companySkillId, skillId),
         eq(companySkillComments.id, commentId),
+        isNull(companySkillComments.deletedAt),
       ))
       .returning()
       .then((rows) => rows[0] ?? null);
@@ -2826,6 +2828,7 @@ export function companySkillService(db: Db) {
         eq(companySkillComments.companyId, companyId),
         eq(companySkillComments.companySkillId, skillId),
         eq(companySkillComments.id, commentId),
+        isNull(companySkillComments.deletedAt),
       ))
       .then((rows) => rows[0] ?? null);
     if (!existing) throw notFound("Skill comment not found");
@@ -2838,6 +2841,7 @@ export function companySkillService(db: Db) {
         eq(companySkillComments.companyId, companyId),
         eq(companySkillComments.companySkillId, skillId),
         eq(companySkillComments.id, commentId),
+        isNull(companySkillComments.deletedAt),
       ))
       .returning()
       .then((rows) => rows[0] ?? null);

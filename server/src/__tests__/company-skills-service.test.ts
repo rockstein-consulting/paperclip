@@ -249,6 +249,15 @@ describeEmbeddedPostgres("companySkillService.list", () => {
     await expect(svc.deleteComment(companyId, skillId, comment.id, { type: "user", userId: "board" }))
       .resolves.toMatchObject({ id: comment.id, deletedAt: expect.any(Date) });
     await expect(svc.listComments(companyId, skillId)).resolves.toEqual([]);
+    await expect(svc.updateComment(
+      companyId,
+      skillId,
+      comment.id,
+      { body: "Resurrected." },
+      { type: "user", userId: "board" },
+    )).rejects.toMatchObject({ status: 404 });
+    await expect(svc.deleteComment(companyId, skillId, comment.id, { type: "user", userId: "board" }))
+      .rejects.toMatchObject({ status: 404 });
     await expect(svc.createComment(
       companyId,
       skillId,
