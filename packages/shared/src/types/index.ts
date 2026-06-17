@@ -261,6 +261,7 @@ export type {
   IssueRetryNowOutcome,
   IssueRetryNowResponse,
   IssueReferenceSource,
+  IssueLinkedPipelineCase,
   IssueRelatedWorkItem,
   IssueRelatedWorkSummary,
   IssueRelation,
