@@ -53,20 +53,20 @@ export function workModeMetaList(conferenceRoomChat: boolean): WorkModeMeta[] {
       classes: STANDARD_CLASSES,
     },
     {
-      value: "ask",
-      label: conferenceRoomChat ? "Ask mode" : "Ask",
-      shortLabel: "Ask",
-      icon: MessageCircleQuestion,
-      tone: "ask",
-      classes: ASK_CLASSES,
-    },
-    {
       value: "planning",
       label: conferenceRoomChat ? "Plan mode" : "Planning",
       shortLabel: conferenceRoomChat ? "Plan" : "Planning",
       icon: ClipboardList,
       tone: "planning",
       classes: PLANNING_CLASSES,
+    },
+    {
+      value: "ask",
+      label: conferenceRoomChat ? "Ask mode" : "Ask",
+      shortLabel: "Ask",
+      icon: MessageCircleQuestion,
+      tone: "ask",
+      classes: ASK_CLASSES,
     },
   ];
 }

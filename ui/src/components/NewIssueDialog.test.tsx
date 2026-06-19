@@ -793,7 +793,7 @@ describe("NewIssueDialog", () => {
         metaKey: true,
       }));
     });
-    expect(modeChip()?.getAttribute("data-issue-work-mode-chip")).toBe("ask");
+    expect(modeChip()?.getAttribute("data-issue-work-mode-chip")).toBe("planning");
 
     await act(async () => {
       modeChip()?.dispatchEvent(new KeyboardEvent("keydown", {
@@ -803,7 +803,7 @@ describe("NewIssueDialog", () => {
         metaKey: true,
       }));
     });
-    expect(modeChip()?.getAttribute("data-issue-work-mode-chip")).toBe("planning");
+    expect(modeChip()?.getAttribute("data-issue-work-mode-chip")).toBe("ask");
 
     await act(async () => {
       modeChip()?.dispatchEvent(new KeyboardEvent("keydown", {
