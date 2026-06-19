@@ -3876,6 +3876,7 @@ const IssueChatComposer = forwardRef<IssueChatComposerHandle, IssueChatComposerP
                   data-pending-work-mode={pendingWorkMode}
                   aria-haspopup="menu"
                   aria-expanded={workModeMenuOpen}
+                  aria-pressed={pendingWorkMode !== "standard"}
                   aria-keyshortcuts="Meta+Period Control+Period"
                   title={titleForPendingWorkMode(pendingWorkMode, true)}
                   className={cn(

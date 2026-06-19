@@ -493,6 +493,7 @@ describe("IssueChatThread", () => {
     );
     expect(toggle).not.toBeNull();
     expect(toggle?.getAttribute("data-pending-work-mode")).toBe("planning");
+    expect(toggle?.getAttribute("aria-pressed")).toBe("true");
     expect(toggle?.textContent).toContain("Plan mode");
 
     act(() => {
