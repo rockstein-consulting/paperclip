@@ -590,7 +590,7 @@ describe.sequential("issue comment reopen routes", () => {
     ["resume", { resume: true }],
     ["reopen", { reopen: true }],
   ])(
-    "allows mention-granted non-assignee agent POST comments on closed issues with %s intent without reopening",
+    "denies mention-granted non-assignee agent POST comments on closed issues with %s intent",
     async (_name, intent) => {
       const mentionedAgentId = "33333333-3333-4333-8333-333333333333";
       mockIssueService.getById.mockResolvedValue(makeIssue("done"));
@@ -618,11 +618,12 @@ describe.sequential("issue comment reopen routes", () => {
         .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
         .send({ body: "Please continue this closed issue.", ...intent });
 
-      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect(res.status, JSON.stringify(res.body)).toBe(403);
+      expect(res.body).toEqual({ error: "Issue is outside this actor's authorization boundary" });
       expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:comment" }));
-      expect(mockAccessService.decide).not.toHaveBeenCalledWith(expect.objectContaining({ action: "issue:mutate" }));
+      expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "issue:mutate" }));
       expect(mockIssueService.update).not.toHaveBeenCalled();
-      expect(mockIssueService.addComment).toHaveBeenCalled();
+      expect(mockIssueService.addComment).not.toHaveBeenCalled();
       expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
     },
   );

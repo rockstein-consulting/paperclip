@@ -7386,6 +7386,8 @@ export function issueRoutes(
       req.actor.type === "agent" &&
       issue.assigneeAgentId !== null &&
       issue.assigneeAgentId !== req.actor.agentId &&
+      !reopenRequested &&
+      !resumeRequested &&
       isIssueMentionGrantDecision(commentAccessDecision);
     const effectiveReopenRequested = mentionGrantedPeerAgentCommentOnly ? false : reopenRequested;
     const effectiveResumeRequested = mentionGrantedPeerAgentCommentOnly ? false : resumeRequested;
