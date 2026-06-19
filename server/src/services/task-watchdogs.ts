@@ -1275,19 +1275,26 @@ export function taskWatchdogService(db: Db, deps: TaskWatchdogServiceDeps = {}) 
   }
 
   async function activeWatchdogsForIssueAndAncestors(companyId: string, issueId: string) {
-    const issueRows = await db
-      .select({ id: issues.id, parentId: issues.parentId })
-      .from(issues)
-      .where(and(eq(issues.companyId, companyId), isNull(issues.hiddenAt)));
-    const byId = new Map(issueRows.map((issue) => [issue.id, issue]));
-    const ancestorIds: string[] = [];
-    const seen = new Set<string>();
-    let current = byId.get(issueId) ?? null;
-    while (current && !seen.has(current.id)) {
-      seen.add(current.id);
-      ancestorIds.push(current.id);
-      current = current.parentId ? byId.get(current.parentId) ?? null : null;
-    }
+    const ancestorRows = await db.execute(sql`
+      WITH RECURSIVE ancestors(id, parent_id, depth) AS (
+        SELECT id, parent_id, 0
+        FROM issues
+        WHERE company_id = ${companyId}
+          AND id = ${issueId}
+          AND hidden_at IS NULL
+        UNION ALL
+        SELECT parent.id, parent.parent_id, ancestors.depth + 1
+        FROM issues parent
+        JOIN ancestors ON parent.id = ancestors.parent_id
+        WHERE parent.company_id = ${companyId}
+          AND parent.hidden_at IS NULL
+          AND ancestors.depth < ${TASK_WATCHDOG_SUBTREE_MAX_DEPTH - 1}
+      )
+      SELECT id FROM ancestors
+    `);
+    const ancestorIds = (Array.isArray(ancestorRows) ? ancestorRows : [])
+      .map((row) => typeof row === "object" && row !== null ? (row as Record<string, unknown>).id : null)
+      .filter((id): id is string => typeof id === "string");
     if (ancestorIds.length === 0) return [];
     return db
       .select()
