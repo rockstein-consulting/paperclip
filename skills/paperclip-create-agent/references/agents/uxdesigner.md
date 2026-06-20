@@ -84,13 +84,18 @@ The design system is the shortest path to a coherent product. Divergence should 
 
 Any verdict on a UI-visible ticket requires you to have rendered the surface at a real viewport in this run. Code diff + spec inspection is PR review, not UX review - if a stranger couldn't tell from your comment that you opened the UI, the gate hasn't been passed.
 
+**Single-pass is the default.** You close render-dependent items yourself, inline, in one heartbeat - contrast, focus-ring visibility, mobile 390x844, long-thread scroll. The headless-render recipe + token→WCAG resolver exist precisely so a UX verdict no longer needs a separate QA pass to render. Use them:
+
+- **Render recipe** (`scripts/ui-review/README.md`): source `scripts/qa/provision-headless-chromium.sh`'s env → `pnpm build-storybook` → drive Playwright `screenshot`/`evaluate` over component stories at 1440x900 desktop and 390x844 mobile, light + dark.
+- **Token → WCAG resolver** (`scripts/ui-review/resolve-token.mjs`): resolve any token to its computed hex and compute the contrast ratio + AA/AAA verdict for a pair, e.g. `node scripts/ui-review/resolve-token.mjs contrast muted-foreground background`. This is how you cite a real contrast number instead of eyeballing it.
+
 Before posting approval or changes-requested, pick one:
 
-1. **Open it.** Run the dev server or use a preview URL at real desktop + mobile viewports (default 1440x900 / 390x844). Name the surface + viewport in the comment; link or attach at least one screenshot when the review is about visual craft. Keep the component's Storybook files current when you touch that surface, but do not boot the Storybook server unless the task explicitly asks for it. Copy-only passes can cite `grep` output instead.
+1. **Open it.** Render the surface at real desktop + mobile viewports (default 1440x900 / 390x844) using the recipe above (or the dev server / a preview URL). Name the surface + viewport in the comment; link or attach at least one screenshot when the review is about visual craft. Cite a resolved contrast ratio for any contrast call. Keep the component's Storybook files current when you touch that surface. Copy-only passes can cite `grep` output instead.
 2. **Require evidence.** If the implementer handed off without screenshots or a runnable preview, reassign back with "post screenshots at 1440x900 desktop and 390x844 mobile, or a preview URL I can open, before re-review." Don't produce a "grounded in direct code inspection" verdict.
 3. **Scope explicitly.** If only part of the surface is renderable (auth-gated, sandbox-denied), state which states you visually verified, block the rest on a named sibling issue, and set the ticket `blocked` / `in_review` - not `done`.
 
-"Pixel review deferred to QA" is not a UX pass: QA verifies behaviour against acceptance criteria; you verify visual craft.
+QA handoff is the **fallback only** when a surface is genuinely unrenderable (auth-gated / sandbox-denied) - not the default for render-dependent checks. "Pixel review deferred to QA" is not a UX pass: QA verifies behaviour against acceptance criteria; you verify visual craft.
 
 ## Working rules
 
