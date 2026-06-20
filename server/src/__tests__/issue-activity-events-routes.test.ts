@@ -11,6 +11,7 @@ const mockIssueService = vi.hoisted(() => ({
   addComment: vi.fn(),
   findMentionedAgents: vi.fn(),
   getRelationSummaries: vi.fn(),
+  mirrorGateConfirmationToParent: vi.fn(),
   listWakeableBlockedDependents: vi.fn(),
   getWakeableParentAfterChildCompletion: vi.fn(),
 }));
@@ -176,6 +177,7 @@ describe("issue activity event routes", () => {
     mockIssueService.assertCheckoutOwner.mockResolvedValue({ adoptedFromRunId: null });
     mockIssueService.findMentionedAgents.mockResolvedValue([]);
     mockIssueService.getRelationSummaries.mockResolvedValue({ blockedBy: [], blocks: [] });
+    mockIssueService.mirrorGateConfirmationToParent.mockResolvedValue(null);
     mockIssueService.listWakeableBlockedDependents.mockResolvedValue([]);
     mockIssueService.getWakeableParentAfterChildCompletion.mockResolvedValue(null);
     mockAccessService.canUser.mockResolvedValue(false);
@@ -383,6 +385,10 @@ describe("issue activity event routes", () => {
 
     expect(res.status).toBe(200);
     await vi.waitFor(() => {
+      expect(mockIssueService.mirrorGateConfirmationToParent).toHaveBeenCalledWith(issue.id);
+      expect(mockIssueService.mirrorGateConfirmationToParent.mock.invocationCallOrder[0]).toBeLessThan(
+        mockIssueService.listWakeableBlockedDependents.mock.invocationCallOrder[0],
+      );
       expect(mockLogActivity).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({

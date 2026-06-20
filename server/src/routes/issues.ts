@@ -6465,6 +6465,11 @@ export function issueRoutes(
 
       const becameDone = existing.status !== "done" && issue.status === "done";
       if (becameDone) {
+        try {
+          await svc.mirrorGateConfirmationToParent(issue.id);
+        } catch (err) {
+          logger.warn({ err, issueId: issue.id }, "failed to mirror gate confirmation to parent");
+        }
         const dependents = await svc.listWakeableBlockedDependents(issue.id);
         for (const dependent of dependents) {
           addWakeup(dependent.assigneeAgentId, {
@@ -7855,6 +7860,11 @@ export function issueRoutes(
 
       const becameDone = issueBeforeCommentDecision.status !== "done" && currentIssue.status === "done";
       if (becameDone) {
+        try {
+          await svc.mirrorGateConfirmationToParent(currentIssue.id);
+        } catch (err) {
+          logger.warn({ err, issueId: currentIssue.id }, "failed to mirror gate confirmation to parent");
+        }
         const dependents = await svc.listWakeableBlockedDependents(currentIssue.id);
         for (const dependent of dependents) {
           addWakeup(dependent.assigneeAgentId, {
