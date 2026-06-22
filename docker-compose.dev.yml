@@ -1,0 +1,40 @@
+# Dev-Umgebung fuer Sophie-Projekt (Spur A Fork)
+# Port 3101 (Prod: 3100), Postgres Port 5433 (Prod: 5432)
+services:
+  db-dev:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: paperclip
+      POSTGRES_PASSWORD: paperclip_dev
+      POSTGRES_DB: paperclip_dev
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperclip -d paperclip_dev"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+
+  server-dev:
+    image: paperclip-fork-server-dev:latest
+    ports:
+      - "3101:3100"
+    environment:
+      DATABASE_URL: postgres://paperclip:paperclip_dev@db-dev:5432/paperclip_dev
+      PORT: "3100"
+      SERVE_UI: "true"
+      PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
+      PAPERCLIP_PUBLIC_URL: "http://localhost:3101"
+      BETTER_AUTH_SECRET: "sophie-dev-secret-rockstein-2026-abc123"
+    volumes:
+      - paperclip-data-dev:/paperclip
+    depends_on:
+      db-dev:
+        condition: service_healthy
+
+volumes:
+  pgdata-dev:
+  paperclip-data-dev:
