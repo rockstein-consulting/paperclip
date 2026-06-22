@@ -60,6 +60,9 @@ export interface Config {
   authBaseUrlMode: AuthBaseUrlMode;
   authPublicBaseUrl: string | undefined;
   authDisableSignUp: boolean;
+  authMicrosoftEntraClientId: string | undefined;
+  authMicrosoftEntraClientSecret: string | undefined;
+  authMicrosoftEntraTenantId: string | undefined;
   databaseMode: DatabaseMode;
   databaseUrl: string | undefined;
   databaseMigrationUrl: string | undefined;
@@ -296,6 +299,9 @@ export function loadConfig(): Config {
     authBaseUrlMode,
     authPublicBaseUrl,
     authDisableSignUp,
+    authMicrosoftEntraClientId: process.env.PAPERCLIP_AUTH_MICROSOFT_CLIENT_ID?.trim() || undefined,
+    authMicrosoftEntraClientSecret: process.env.PAPERCLIP_AUTH_MICROSOFT_CLIENT_SECRET?.trim() || undefined,
+    authMicrosoftEntraTenantId: process.env.PAPERCLIP_AUTH_MICROSOFT_TENANT_ID?.trim() || undefined,
     databaseMode: fileDatabaseMode,
     databaseUrl: process.env.DATABASE_URL ?? fileDbUrl,
     databaseMigrationUrl: process.env.DATABASE_MIGRATION_URL,

@@ -34,8 +34,12 @@ async function loadCurrentUserProfile(db: Db, userId: string) {
   });
 }
 
-export function authRoutes(db: Db) {
+export function authRoutes(db: Db, opts?: { microsoftEntraEnabled?: boolean }) {
   const router = Router();
+
+  router.get("/providers", (_req, res) => {
+    res.json({ microsoftEntraId: opts?.microsoftEntraEnabled ?? false });
+  });
 
   router.get("/get-session", async (req, res) => {
     if (req.actor.type !== "board" || !req.actor.userId) {

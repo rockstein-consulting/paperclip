@@ -131,4 +131,34 @@ export const authApi = {
   signOut: async () => {
     await authPost("/sign-out", {});
   },
+
+  getProviders: async (): Promise<{ microsoftEntraId: boolean }> => {
+    const res = await fetch("/api/auth/providers", {
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return { microsoftEntraId: false };
+    const payload = await res.json().catch(() => null);
+    return { microsoftEntraId: Boolean((payload as { microsoftEntraId?: unknown } | null)?.microsoftEntraId) };
+  },
+
+  signInMicrosoft: async (callbackURL: string): Promise<void> => {
+    const res = await fetch("/api/auth/sign-in/social", {
+      method: "POST",
+      credentials: "include",
+      redirect: "manual",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "microsoft-entra-id", callbackURL }),
+    });
+    // Better-auth returns a redirect; handle both opaque and explicit 302
+    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+      const location = res.headers.get("location");
+      if (location) { window.location.href = location; return; }
+    }
+    // Fallback: JSON body with url field
+    const payload = await res.json().catch(() => null);
+    const url = (payload as { url?: string } | null)?.url;
+    if (url) { window.location.href = url; return; }
+    throw new Error("Microsoft sign-in failed: no redirect URL received");
+  },
 };

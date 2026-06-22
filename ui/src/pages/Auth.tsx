@@ -20,12 +20,18 @@ export function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [microsoftEnabled, setMicrosoftEnabled] = useState(false);
   const errorId = "auth-error";
 
   const nextPath = useMemo(
     () => searchParams.get("next") || getRememberedInvitePath() || "/",
     [searchParams],
   );
+
+  useEffect(() => {
+    authApi.getProviders().then((p) => setMicrosoftEnabled(p.microsoftEntraId)).catch(() => undefined);
+  }, []);
+
   const { data: session, isLoading: isSessionLoading } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
@@ -37,6 +43,13 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     }
   }, [session, navigate, nextPath]);
+
+  const microsoftMutation = useMutation({
+    mutationFn: () => authApi.signInMicrosoft(nextPath),
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : "Microsoft sign-in failed");
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -179,6 +192,26 @@ export function AuthPage() {
                   : "Create Account"}
             </Button>
           </form>
+
+          {microsoftEnabled && mode === "sign_in" && (
+            <div className="mt-4">
+              <div className="relative flex items-center justify-center text-xs text-muted-foreground before:flex-1 before:border-t before:border-border after:flex-1 after:border-t after:border-border before:mr-3 after:ml-3">
+                or
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-4 w-full"
+                disabled={microsoftMutation.isPending}
+                onClick={() => {
+                  setError(null);
+                  microsoftMutation.mutate();
+                }}
+              >
+                {microsoftMutation.isPending ? "Redirecting…" : "Sign in with Microsoft"}
+              </Button>
+            </div>
+          )}
 
           <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}

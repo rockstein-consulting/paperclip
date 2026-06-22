@@ -3,6 +3,7 @@ import type { IncomingHttpHeaders } from "node:http";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { toNodeHandler } from "better-auth/node";
+import { genericOAuth, microsoftEntraId } from "better-auth/plugins/generic-oauth";
 import type { Db } from "@paperclipai/db";
 import {
   authAccounts,
@@ -130,6 +131,23 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  const plugins: ReturnType<typeof genericOAuth>[] = [];
+  if (
+    config.authMicrosoftEntraClientId &&
+    config.authMicrosoftEntraClientSecret &&
+    config.authMicrosoftEntraTenantId
+  ) {
+    plugins.push(genericOAuth({
+      config: [
+        microsoftEntraId({
+          clientId: config.authMicrosoftEntraClientId,
+          clientSecret: config.authMicrosoftEntraClientSecret,
+          tenantId: config.authMicrosoftEntraTenantId,
+        }),
+      ],
+    }));
+  }
+
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -149,6 +167,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       disableSignUp: config.authDisableSignUp,
     },
     advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies }),
+    ...(plugins.length > 0 ? { plugins } : {}),
   };
 
   if (!baseUrl) {
