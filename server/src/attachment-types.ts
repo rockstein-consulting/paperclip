@@ -124,7 +124,8 @@ export const MAX_ATTACHMENT_BYTES =
 
 export function normalizeIssueAttachmentMaxBytes(value: number | null | undefined): number {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    return Math.min(DEFAULT_COMPANY_ATTACHMENT_MAX_BYTES, MAX_ATTACHMENT_BYTES);
+    // When no per-company limit is set, honour the server-wide env-var cap.
+    return Math.min(MAX_ATTACHMENT_BYTES, MAX_COMPANY_ATTACHMENT_MAX_BYTES);
   }
   return Math.min(Math.floor(value), MAX_COMPANY_ATTACHMENT_MAX_BYTES, MAX_ATTACHMENT_BYTES);
 }
