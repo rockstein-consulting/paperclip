@@ -1457,7 +1457,4 @@ export {
   type UpsertSophiePreference,
   type SophiePreferenceResponse,
 } from "./validators/sophie-preferences.js";
-<<<<<<< Updated upstream
-=======
 export type { SophiePreference, SophiePreferenceKey, SophiePreferencesMap, FormalityLevel } from "./types/sophie-preferences.js";
->>>>>>> Stashed changes
