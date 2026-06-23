@@ -1,17 +1,15 @@
 import { useMemo } from "react";
 import { NavLink, useLocation } from "@/lib/router";
 import {
-  House,
+  MessageCircle,
+  Files,
+  FolderOpen,
   CircleDot,
-  SquarePen,
-  Users,
-  Inbox,
+  Settings,
 } from "lucide-react";
 import { useCompany } from "../context/CompanyContext";
-import { useDialogActions } from "../context/DialogContext";
 import { SIDEBAR_SCROLL_RESET_STATE } from "../lib/navigation-scroll";
 import { cn } from "../lib/utils";
-import { useInboxBadge } from "../hooks/useInboxBadge";
 
 interface MobileBottomNavProps {
   visible: boolean;
@@ -21,40 +19,24 @@ interface MobileNavLinkItem {
   type: "link";
   to: string;
   label: string;
-  icon: typeof House;
+  icon: typeof MessageCircle;
   badge?: number;
 }
 
-interface MobileNavActionItem {
-  type: "action";
-  label: string;
-  icon: typeof SquarePen;
-  onClick: () => void;
-}
-
-type MobileNavItem = MobileNavLinkItem | MobileNavActionItem;
+type MobileNavItem = MobileNavLinkItem;
 
 export function MobileBottomNav({ visible }: MobileBottomNavProps) {
-  const location = useLocation();
   const { selectedCompanyId } = useCompany();
-  const { openNewIssue } = useDialogActions();
-  const inboxBadge = useInboxBadge(selectedCompanyId);
 
   const items = useMemo<MobileNavItem[]>(
     () => [
-      { type: "link", to: "/dashboard", label: "Home", icon: House },
-      { type: "link", to: "/issues", label: "Tasks", icon: CircleDot },
-      { type: "action", label: "Create", icon: SquarePen, onClick: () => openNewIssue() },
-      { type: "link", to: "/agents/all", label: "Agents", icon: Users },
-      {
-        type: "link",
-        to: "/inbox",
-        label: "Inbox",
-        icon: Inbox,
-        badge: inboxBadge.inbox,
-      },
+      { type: "link", to: "/sophie", label: "Chat", icon: MessageCircle },
+      { type: "link", to: "/files", label: "Dateien", icon: Files },
+      { type: "link", to: "/projects", label: "Projekte", icon: FolderOpen },
+      { type: "link", to: "/issues", label: "Aufgaben", icon: CircleDot },
+      { type: "link", to: "/company/settings", label: "Einstellungen", icon: Settings },
     ],
-    [openNewIssue, inboxBadge.inbox],
+    [selectedCompanyId],
   );
 
   return (
@@ -63,31 +45,10 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
         "fixed bottom-0 left-0 right-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 transition-transform duration-200 ease-out md:hidden pb-[env(safe-area-inset-bottom)]",
         visible ? "translate-y-0" : "translate-y-full",
       )}
-      aria-label="Mobile navigation"
+      aria-label="Mobile-Navigation"
     >
       <div className="grid h-16 grid-cols-5 px-1">
         {items.map((item) => {
-          if (item.type === "action") {
-            const Icon = item.icon;
-            const active = /\/issues\/new(?:\/|$)/.test(location.pathname);
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={item.onClick}
-                className={cn(
-                  "relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-md text-[10px] font-medium transition-colors",
-                  active
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className="h-[18px] w-[18px]" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          }
-
           const Icon = item.icon;
           return (
             <NavLink
@@ -106,14 +67,19 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
               {({ isActive }) => (
                 <>
                   <span className="relative">
-                    <Icon className={cn("h-[18px] w-[18px]", isActive && "stroke-[2.3]")} />
+                    <Icon
+                      className={cn("h-[18px] w-[18px]", isActive && "stroke-[2.3]")}
+                      style={isActive ? { color: "#C9A962" } : undefined}
+                    />
                     {item.badge != null && item.badge > 0 && (
-                      <span className="absolute -right-2 -top-2 rounded-full bg-primary px-1.5 py-0.5 text-[10px] leading-none text-primary-foreground">
+                      <span className="absolute -right-2 -top-2 rounded-full px-1.5 py-0.5 text-[10px] leading-none" style={{ background: "#C9A962", color: "#0A0A0F" }}>
                         {item.badge > 99 ? "99+" : item.badge}
                       </span>
                     )}
                   </span>
-                  <span className="truncate">{item.label}</span>
+                  <span className="truncate" style={isActive ? { color: "#C9A962" } : undefined}>
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>

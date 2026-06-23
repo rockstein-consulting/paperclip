@@ -31,6 +31,8 @@ import { Costs } from "./pages/Costs";
 import { Activity } from "./pages/Activity";
 import { Inbox } from "./pages/Inbox";
 import { BoardChat } from "./pages/BoardChat";
+import { SophieChat } from "./pages/SophieChat";
+import { FileBrowser } from "./pages/FileBrowser";
 import { CompanySettings } from "./pages/CompanySettings";
 import { CompanyEnvironments } from "./pages/CompanyEnvironments";
 import { CloudUpstream } from "./pages/CloudUpstream";
@@ -73,7 +75,9 @@ import { normalizeRememberedInstanceSettingsPath } from "./lib/instance-settings
 function boardRoutes() {
   return (
     <>
-      <Route index element={<Navigate to="dashboard" replace />} />
+      <Route index element={<Navigate to="sophie" replace />} />
+      <Route path="sophie" element={<SophieChat />} />
+      <Route path="files" element={<FileBrowser />} />
       <Route path="dashboard" element={<Dashboard />} />
       <Route path="dashboard/live" element={<DashboardLive />} />
       <Route path="onboarding" element={<OnboardingRoutePage />} />

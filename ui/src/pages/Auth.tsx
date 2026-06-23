@@ -5,9 +5,6 @@ import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
-import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Sparkles } from "lucide-react";
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -81,157 +78,153 @@ export function AuthPage() {
 
   if (isSessionLoading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
         <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 flex bg-background">
-      <div className="absolute top-4 right-4 z-10">
-        <ThemeToggle />
-      </div>
-      {/* Left half — form */}
-      <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
-        <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
-          <div className="flex items-center gap-2 mb-8">
-            <Sparkles className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Paperclip</span>
-          </div>
-
-          <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
-          </p>
-
-          <form
-            className="mt-6 space-y-4"
-            method="post"
-            action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (mutation.isPending) return;
-              if (!canSubmit) {
-                setError("Please fill in all required fields.");
-                return;
-              }
-              mutation.mutate();
+    <div className="fixed inset-0 flex items-center justify-center bg-background">
+      {/* Centered login card */}
+      <div className="w-full max-w-sm px-8 py-10 rounded-lg border border-border bg-card shadow-2xl">
+        {/* Logo + brand name */}
+        <div className="flex flex-col items-center mb-8">
+          <img
+            src="/rockstein-logo.png"
+            alt="Rockstein AI OS"
+            className="h-16 w-auto mb-4 object-contain"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.display = "none";
             }}
-          >
-            {mode === "sign_up" && (
-              <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
-                <input
-                  id="name"
-                  name="name"
-                  className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  autoComplete="name"
-                  required
-                  aria-required="true"
-                  aria-invalid={error ? true : undefined}
-                  aria-describedby={error ? errorId : undefined}
-                  autoFocus
-                />
-              </div>
-            )}
-            <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">Email</label>
-              <input
-                id="email"
-                name="email"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="username"
-                required
-                aria-required="true"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? errorId : undefined}
-                autoFocus={mode === "sign_in"}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
-              <input
-                id="password"
-                name="password"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
-                required
-                aria-required="true"
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? errorId : undefined}
-              />
-            </div>
-            {error && (
-              <p id={errorId} role="alert" className="text-xs text-destructive">
-                {error}
-              </p>
-            )}
+          />
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#C9A962" }}>
+            Rockstein AI OS
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {mode === "sign_in" ? "Anmelden" : "Konto erstellen"}
+          </p>
+        </div>
+
+        {/* Microsoft SSO — primary option when enabled */}
+        {microsoftEnabled && mode === "sign_in" && (
+          <div className="mb-6">
             <Button
-              type="submit"
-              disabled={mutation.isPending}
-              aria-disabled={!canSubmit || mutation.isPending}
-              className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
-            >
-              {mutation.isPending
-                ? "Working…"
-                : mode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
-            </Button>
-          </form>
-
-          {microsoftEnabled && mode === "sign_in" && (
-            <div className="mt-4">
-              <div className="relative flex items-center justify-center text-xs text-muted-foreground before:flex-1 before:border-t before:border-border after:flex-1 after:border-t after:border-border before:mr-3 after:ml-3">
-                or
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-4 w-full"
-                disabled={microsoftMutation.isPending}
-                onClick={() => {
-                  setError(null);
-                  microsoftMutation.mutate();
-                }}
-              >
-                {microsoftMutation.isPending ? "Redirecting…" : "Sign in with Microsoft"}
-              </Button>
-            </div>
-          )}
-
-          <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
-            <button
               type="button"
-              className="font-medium text-foreground underline underline-offset-2"
+              className="w-full font-semibold"
+              style={{ background: "#C9A962", color: "#0A0A0F" }}
+              disabled={microsoftMutation.isPending}
               onClick={() => {
                 setError(null);
-                setMode(mode === "sign_in" ? "sign_up" : "sign_in");
+                microsoftMutation.mutate();
               }}
             >
-              {mode === "sign_in" ? "Create one" : "Sign in"}
-            </button>
+              {microsoftMutation.isPending ? "Weiterleitung…" : "Mit Microsoft anmelden"}
+            </Button>
+            <div className="relative flex items-center justify-center text-xs text-muted-foreground mt-4 before:flex-1 before:border-t before:border-border after:flex-1 after:border-t after:border-border before:mr-3 after:ml-3">
+              oder
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
-      {/* Right half — ASCII art animation (hidden on mobile) */}
-      <div className="hidden md:block w-1/2 overflow-hidden">
-        <AsciiArtAnimation />
+        <form
+          className="space-y-4"
+          method="post"
+          action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (mutation.isPending) return;
+            if (!canSubmit) {
+              setError("Bitte alle Pflichtfelder ausfüllen.");
+              return;
+            }
+            mutation.mutate();
+          }}
+        >
+          {mode === "sign_up" && (
+            <div>
+              <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
+              <input
+                id="name"
+                name="name"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                autoComplete="name"
+                required
+                aria-required="true"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? errorId : undefined}
+                autoFocus
+              />
+            </div>
+          )}
+          <div>
+            <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">E-Mail</label>
+            <input
+              id="email"
+              name="email"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="username"
+              required
+              aria-required="true"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+              autoFocus={mode === "sign_in"}
+            />
+          </div>
+          <div>
+            <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Passwort</label>
+            <input
+              id="password"
+              name="password"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
+              required
+              aria-required="true"
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+            />
+          </div>
+          {error && (
+            <p id={errorId} role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+          )}
+          <Button
+            type="submit"
+            variant="outline"
+            disabled={mutation.isPending}
+            aria-disabled={!canSubmit || mutation.isPending}
+            className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
+          >
+            {mutation.isPending
+              ? "Bitte warten…"
+              : mode === "sign_in"
+                ? "Anmelden"
+                : "Konto erstellen"}
+          </Button>
+        </form>
+
+        <div className="mt-5 text-center text-sm text-muted-foreground">
+          {mode === "sign_in" ? "Kein Konto?" : "Bereits registriert?"}{" "}
+          <button
+            type="button"
+            className="font-medium text-foreground underline underline-offset-2"
+            onClick={() => {
+              setError(null);
+              setMode(mode === "sign_in" ? "sign_up" : "sign_in");
+            }}
+          >
+            {mode === "sign_in" ? "Erstellen" : "Anmelden"}
+          </button>
+        </div>
       </div>
     </div>
   );
