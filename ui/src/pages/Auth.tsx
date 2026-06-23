@@ -44,7 +44,7 @@ export function AuthPage() {
   const microsoftMutation = useMutation({
     mutationFn: () => authApi.signInMicrosoft(nextPath),
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Microsoft sign-in failed");
+      setError(err instanceof Error ? err.message : "Microsoft-Anmeldung fehlgeschlagen");
     },
   });
 
@@ -67,7 +67,7 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      setError(err instanceof Error ? err.message : "Anmeldung fehlgeschlagen");
     },
   });
 
@@ -79,7 +79,7 @@ export function AuthPage() {
   if (isSessionLoading) {
     return (
       <div className="fixed inset-0 flex items-center justify-center bg-background">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">Laden…</p>
       </div>
     );
   }

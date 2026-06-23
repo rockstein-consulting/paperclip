@@ -143,6 +143,18 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
           clientId: config.authMicrosoftEntraClientId,
           clientSecret: config.authMicrosoftEntraClientSecret,
           tenantId: config.authMicrosoftEntraTenantId,
+          scopes: [
+            "openid",
+            "profile",
+            "email",
+            "offline_access",
+            "Mail.ReadWrite",
+            "Mail.Send",
+            "MailboxSettings.ReadWrite",
+            "Calendars.ReadWrite",
+            "Contacts.ReadWrite",
+            "Files.ReadWrite.All",
+          ],
         }),
       ],
     }));

@@ -17,6 +17,7 @@ function hashToken(token: string) {
 interface ActorMiddlewareOptions {
   deploymentMode: DeploymentMode;
   resolveSession?: (req: Request) => Promise<BetterAuthSessionResult | null>;
+  allowedEmails?: string[];
 }
 
 export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHandler {
@@ -59,6 +60,15 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
           );
         }
         if (session?.user?.id) {
+          const email = session.user.email?.toLowerCase() ?? null;
+          const allowedEmails = opts.allowedEmails;
+          if (allowedEmails && allowedEmails.length > 0 && (email === null || !allowedEmails.includes(email))) {
+            _res.status(403).json({
+              error: "forbidden",
+              message: "Ihr Konto ist nicht für den Zugriff auf diese Anwendung freigegeben. Bitte wenden Sie sich an Ihren Administrator.",
+            });
+            return;
+          }
           const userId = session.user.id;
           const [roleRow, memberships] = await Promise.all([
             db

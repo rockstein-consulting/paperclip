@@ -670,6 +670,7 @@ export async function startServer(): Promise<StartedServer> {
       config.authMicrosoftEntraClientSecret &&
       config.authMicrosoftEntraTenantId
     ),
+    allowedEmails: config.authAllowedEmails,
   });
   const server = createServer(app as unknown as Parameters<typeof createServer>[0]);
 

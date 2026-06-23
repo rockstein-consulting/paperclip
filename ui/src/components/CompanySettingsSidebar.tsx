@@ -12,6 +12,7 @@ import {
   Settings,
   Shield,
   SlidersHorizontal,
+  Bot,
   UserRoundPen,
   Users,
 } from "lucide-react";
@@ -131,6 +132,7 @@ export function CompanySettingsSidebar() {
                 end
               />
             ))}
+          <SidebarNavItem to="/company/settings/sophie-preferences" label="Sophie" icon={Bot} end />
           <SidebarNavItem to="/company/settings/invites" label="Invites" icon={MailPlus} end />
           <SidebarNavItem to="/company/settings/secrets" label="Secrets" icon={KeyRound} end />
         </div>
