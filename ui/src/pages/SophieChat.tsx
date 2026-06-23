@@ -168,7 +168,7 @@ export function SophieChat() {
   });
 
   const voteByComment = useMemo(
-    () => new Map(feedbackVotes.map((v) => [v.commentId, v.vote as FeedbackVoteValue])),
+    () => new Map(feedbackVotes.map((v) => [v.targetId, v.vote as FeedbackVoteValue])),
     [feedbackVotes],
   );
 
