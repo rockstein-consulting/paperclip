@@ -5,6 +5,7 @@ import { Layout } from "./components/Layout";
 import { ConferenceRoomChatGate } from "./components/ConferenceRoomChatGate";
 import { OnboardingWizardVariant } from "./components/OnboardingWizardVariant";
 import { CloudAccessGate } from "./components/CloudAccessGate";
+import { SophieOnboardingGate } from "./components/SophieOnboardingGate";
 import { Dashboard } from "./pages/Dashboard";
 import { DashboardLive } from "./pages/DashboardLive";
 import { Companies } from "./pages/Companies";
@@ -51,6 +52,7 @@ import { InstanceAccess } from "./pages/InstanceAccess";
 import { InstanceSettings } from "./pages/InstanceSettings";
 import { InstanceExperimentalSettings } from "./pages/InstanceExperimentalSettings";
 import { ProfileSettings } from "./pages/ProfileSettings";
+import { SophiePreferencesPage } from "./pages/SophiePreferencesPage";
 import { PluginManager } from "./pages/PluginManager";
 import { PluginSettings } from "./pages/PluginSettings";
 import { AdapterManager } from "./pages/AdapterManager";
@@ -94,6 +96,7 @@ function boardRoutes() {
       <Route path="company/settings/secrets" element={<Secrets />} />
       <Route path="company/settings/instance" element={<Navigate to="general" replace />} />
       <Route path="company/settings/instance/profile" element={<ProfileSettings />} />
+      <Route path="company/settings/sophie-preferences" element={<SophiePreferencesPage />} />
       <Route path="company/settings/instance/general" element={<InstanceGeneralSettings />} />
       <Route path="company/settings/instance/environments" element={<CompanyEnvironments />} />
       <Route path="company/settings/instance/access" element={<InstanceAccess />} />
@@ -408,6 +411,7 @@ export function App() {
         </Route>
       </Routes>
       <OnboardingWizardVariant />
+      <SophieOnboardingGate />
     </>
   );
 }

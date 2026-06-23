@@ -568,3 +568,4 @@ export type {
   PluginDatabaseNamespaceMode,
   PluginDatabaseNamespaceStatus,
 } from "./plugin.js";
+export type { SophiePreference, SophiePreferenceKey, SophiePreferencesMap, FormalityLevel } from "./sophie-preferences.js";

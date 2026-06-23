@@ -224,7 +224,7 @@ export function SophieChat() {
   const handleCommentVote = useCallback(
     async (commentId: string, vote: FeedbackVoteValue, _options: { reason?: string }) => {
       if (!chatIssueId) return;
-      await issuesApi.upsertFeedbackVote(chatIssueId, { commentId, vote });
+      await issuesApi.upsertFeedbackVote(chatIssueId, { targetType: "issue_comment" as const, targetId: commentId, vote });
       queryClient.invalidateQueries({ queryKey: queryKeys.issues.feedbackVotes(chatIssueId) });
     },
     [chatIssueId, queryClient],
@@ -507,7 +507,7 @@ export function SophieChat() {
                             sharingPreference: "prompt",
                             termsUrl: null,
                             onVote: (vote, options) =>
-                              handleCommentVote(comment.id, vote, options),
+                              handleCommentVote(comment.id, vote, options ?? {}),
                           }
                         : null
                     }

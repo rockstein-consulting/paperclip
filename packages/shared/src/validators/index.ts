@@ -574,3 +574,12 @@ export {
   type SetPluginState,
   type ListPluginState,
 } from "./plugin.js";
+export {
+  sophiePreferenceKeySchema,
+  sophiePreferenceValueSchema,
+  upsertSophiePreferenceSchema,
+  sophiePreferenceSchema,
+  SOPHIE_PREFERENCE_KEYS,
+  type UpsertSophiePreference,
+  type SophiePreferenceResponse,
+} from "./sophie-preferences.js";
