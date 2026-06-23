@@ -32,6 +32,7 @@ interface PendingAuth {
   userId: string;
   nonce: string;
   expiresAt: string;
+  redirectUri: string;
 }
 
 interface TokenResponse {
@@ -135,7 +136,10 @@ async function deleteTokens(companyId: string, userId: string): Promise<void> {
 // OAuth helpers
 // ---------------------------------------------------------------------------
 
-function buildRedirectUri(baseUrl: string): string {
+// Fallback redirect URI — used when the UI does not pass redirectUri.
+// In practice the UI always passes window.location.origin+pathname so this
+// fallback is only hit by direct agent/API callers.
+function buildFallbackRedirectUri(baseUrl: string): string {
   return `${baseUrl}/api/plugins/rockstein.ms365/api/auth/exchange`;
 }
 
@@ -267,17 +271,31 @@ async function handleAuthAuthorize(cfg: MS365Config, input: PluginApiRequestInpu
   const userId = resolveUserId(input);
   if (!userId) return err(400, "userId required");
 
+  // Accept redirectUri from UI (typically window.location.origin+pathname of the settings page).
+  // Validates same-origin to prevent open-redirect abuse. Falls back to the API exchange endpoint
+  // for direct agent/API callers that do not pass a redirectUri.
+  const rawRedirectUri = queryStr(input.query, "redirectUri");
+  let redirectUri: string;
+  if (rawRedirectUri) {
+    if (!rawRedirectUri.startsWith(cfg.baseUrl)) {
+      return err(400, "redirectUri must originate from the configured baseUrl");
+    }
+    redirectUri = rawRedirectUri;
+  } else {
+    redirectUri = buildFallbackRedirectUri(cfg.baseUrl);
+  }
+
   const nonce = randomUUID();
   const pending: PendingAuth = {
     userId,
     nonce,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    redirectUri,
   };
   await ctx.state.set(pendingKey(input.companyId, userId), pending);
 
   // Encode companyId + userId + nonce in state param so exchange can resolve them
   const state = Buffer.from(JSON.stringify({ companyId: input.companyId, userId, nonce })).toString("base64url");
-  const redirectUri = buildRedirectUri(cfg.baseUrl);
 
   const params = new URLSearchParams({
     client_id: cfg.clientId,
@@ -320,11 +338,14 @@ async function handleAuthExchange(cfg: MS365Config, secret: string, input: Plugi
   if (pendingAuth.nonce !== statePayload.nonce) return err(400, "Nonce mismatch — possible CSRF");
   if (new Date(pendingAuth.expiresAt) < new Date()) return err(400, "Auth request expired (10 min window)");
 
+  // Use the same redirectUri that was stored during the authorization request.
+  // Microsoft requires this to match exactly.
+  const exchangeRedirectUri = pendingAuth.redirectUri ?? buildFallbackRedirectUri(cfg.baseUrl);
   const params = new URLSearchParams({
     client_id: cfg.clientId,
     client_secret: secret,
     code,
-    redirect_uri: buildRedirectUri(cfg.baseUrl),
+    redirect_uri: exchangeRedirectUri,
     grant_type: "authorization_code",
   });
   const tokenResp = await exchangeOrRefresh(cfg, secret, params);

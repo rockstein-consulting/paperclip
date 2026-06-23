@@ -133,9 +133,13 @@ export function MS365SettingsPage(_props: PluginSettingsPageProps) {
     setErrorMsg(null);
     setSuccessMsg(null);
     try {
+      // Pass the current page URL as redirectUri so Microsoft sends the user
+      // back here after login. The worker validates same-origin and stores it
+      // for the token exchange step.
+      const redirectUri = `${window.location.origin}${window.location.pathname}`;
       const result = await pluginFetch<{ oauthUrl: string }>(
         "GET",
-        `/auth/authorize?companyId=${encodeURIComponent(companyId)}&userId=${encodeURIComponent(userId)}`,
+        `/auth/authorize?companyId=${encodeURIComponent(companyId)}&userId=${encodeURIComponent(userId)}&redirectUri=${encodeURIComponent(redirectUri)}`,
       );
       window.location.href = result.oauthUrl;
     } catch (e) {
