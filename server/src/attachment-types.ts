@@ -36,6 +36,22 @@ export const DEFAULT_ALLOWED_TYPES: readonly string[] = [
   "video/webm",
   "video/quicktime",
   "video/x-m4v",
+  // HEIC/HEIF — server-side converted to JPEG before storage
+  "image/heic",
+  "image/heif",
+  // Audio — WhatsApp voice notes + common formats
+  "audio/mpeg",
+  "audio/wav",
+  "audio/ogg",
+  "audio/mp4",
+  "audio/x-m4a",
+  "audio/webm",
+  // Office documents
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/msword",
+  "application/vnd.ms-excel",
 ];
 
 export const DEFAULT_ATTACHMENT_CONTENT_TYPE = "application/octet-stream";

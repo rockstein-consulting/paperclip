@@ -8083,6 +8083,17 @@ export function issueRoutes(
       return;
     }
 
+    // HEIC/HEIF -> JPEG server-side conversion
+    let uploadBuffer = file.buffer;
+    let uploadContentType = contentType;
+    let uploadFilename = file.originalname || null;
+    if (contentType === "image/heic" || contentType === "image/heif") {
+      const sharp = (await import("sharp")).default;
+      uploadBuffer = await sharp(file.buffer).jpeg({ quality: 90 }).toBuffer();
+      uploadContentType = "image/jpeg";
+      if (uploadFilename) uploadFilename = uploadFilename.replace(/\.(heic|heif)$/i, ".jpg");
+    }
+
     const parsedMeta = createIssueAttachmentMetadataSchema.safeParse(req.body ?? {});
     if (!parsedMeta.success) {
       res.status(400).json({ error: "Invalid attachment metadata", details: parsedMeta.error.issues });
@@ -8093,9 +8104,9 @@ export function issueRoutes(
     const stored = await storage.putFile({
       companyId,
       namespace: `issues/${issueId}`,
-      originalFilename: file.originalname || null,
-      contentType,
-      body: file.buffer,
+      originalFilename: uploadFilename,
+      contentType: uploadContentType,
+      body: uploadBuffer,
     });
 
     const attachment = await svc.createAttachment({
